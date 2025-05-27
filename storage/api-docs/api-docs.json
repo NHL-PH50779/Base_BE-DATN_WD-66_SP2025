@@ -1,0 +1,89 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Base BE API Documentation",
+        "description": "API documentation for the base_be project",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/products": {
+            "get": {
+                "tags": ["Products"],
+                "summary": "Get list of products",
+                "description": "Returns a list of products with details including brand, category, and variants",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": { "type": "integer", "example": 1 },
+                                            "name": { "type": "string", "example": "Laptop" },
+                                            "description": { "type": "string", "example": "High-performance laptop" },
+                                            "thumbnail": { "type": "string", "example": "laptop.jpg" },
+                                            "brand": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": { "type": "integer", "example": 1 },
+                                                    "name": { "type": "string", "example": "Dell" }
+                                                }
+                                            },
+                                            "category": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": { "type": "integer", "example": 1 },
+                                                    "name": { "type": "string", "example": "Electronics" }
+                                                }
+                                            },
+                                            "variants": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": { "type": "integer", "example": 1 },
+                                                        "sku": { "type": "string", "example": "LAP-001" },
+                                                        "price": { "type": "number", "format": "float", "example": 999.99 },
+                                                        "quantity": { "type": "integer", "example": 10 },
+                                                        "image": { "type": "string", "example": "variant1.jpg" },
+                                                        "variant_values": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "id": { "type": "integer", "example": 1 },
+                                                                    "attribute_value": {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                            "id": { "type": "integer", "example": 1 },
+                                                                            "value": { "type": "string", "example": "16GB" },
+                                                                            "attribute": {
+                                                                                "type": "object",
+                                                                                "properties": {
+                                                                                    "id": { "type": "integer", "example": 1 },
+                                                                                    "name": { "type": "string", "example": "RAM" }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": { "description": "Bad request" }
+                }
+            }
+        }
+    }
+}
