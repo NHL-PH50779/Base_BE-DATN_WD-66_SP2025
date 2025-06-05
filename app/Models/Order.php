@@ -1,26 +1,27 @@
 <?php
 
+// app/Models/Order.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'order_status_id',
-        'payment_status_id',
-        'total',
-        'created_at',
-    ];
+    public $timestamps = false;
+    protected $fillable = ['user_id', 'order_status_id', 'payment_status_id', 'total'];
 
-    public function user()
+    public function items()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(OrderItem::class);
     }
 
-    public function returnRequests()
+    public function status()
     {
-        return $this->hasMany(ReturnRequest::class);
+        return $this->belongsTo(OrderStatus::class, 'order_status_id');
+    }
+
+    public function paymentStatus()
+    {
+        return $this->belongsTo(PaymentStatus::class, 'payment_status_id');
     }
 }
