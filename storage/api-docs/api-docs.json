@@ -6,84 +6,1321 @@
         "version": "1.0.0"
     },
     "paths": {
-        "/api/products": {
-            "get": {
-                "tags": ["Products"],
-                "summary": "Get list of products",
-                "description": "Returns a list of products with details including brand, category, and variants",
-                "responses": {
-                    "200": {
-                        "description": "Successful operation",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "id": { "type": "integer", "example": 1 },
-                                            "name": { "type": "string", "example": "Laptop" },
-                                            "description": { "type": "string", "example": "High-performance laptop" },
-                                            "thumbnail": { "type": "string", "example": "laptop.jpg" },
-                                            "brand": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "id": { "type": "integer", "example": 1 },
-                                                    "name": { "type": "string", "example": "Dell" }
-                                                }
-                                            },
-                                            "category": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "id": { "type": "integer", "example": 1 },
-                                                    "name": { "type": "string", "example": "Electronics" }
-                                                }
-                                            },
-                                            "variants": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "id": { "type": "integer", "example": 1 },
-                                                        "sku": { "type": "string", "example": "LAP-001" },
-                                                        "price": { "type": "number", "format": "float", "example": 999.99 },
-                                                        "quantity": { "type": "integer", "example": 10 },
-                                                        "image": { "type": "string", "example": "variant1.jpg" },
-                                                        "variant_values": {
-                                                            "type": "array",
-                                                            "items": {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                    "id": { "type": "integer", "example": 1 },
-                                                                    "attribute_value": {
-                                                                        "type": "object",
-                                                                        "properties": {
-                                                                            "id": { "type": "integer", "example": 1 },
-                                                                            "value": { "type": "string", "example": "16GB" },
-                                                                            "attribute": {
-                                                                                "type": "object",
-                                                                                "properties": {
-                                                                                    "id": { "type": "integer", "example": 1 },
-                                                                                    "name": { "type": "string", "example": "RAM" }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "400": { "description": "Bad request" }
-                }
-            }
-        }
-    }
+		"/brands/": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"title": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					}
+				}
+			}
+		},
+		"/brands/{id}": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						
+						"type": "string"
+					},
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"title": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/brands/soft-delete/{id}": {
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/brands/restore/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/categories/": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"title": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					}
+				}
+			}
+		},
+		"/categories/{id}": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/categories/soft-delete/{id}": {
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/categories/restore/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/sub-categories/": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"categoryId": {
+									"example": "any"
+								},
+								"title": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					}
+				}
+			}
+		},
+		"/sub-categories/{id}": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"title": {
+									"example": "any"
+								},
+								"categoryId": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/sub-categories/soft-delete/{id}": {
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/sub-categories/restore/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/products/": {
+			"get": {
+				"description": "Lấy danh sách sản phẩm, có thể tìm kiếm theo tên.",
+				"parameters": [
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					},
+					{
+						"name": "search",
+						"in": "query",
+						"type": "string",
+						"description": "Tìm kiếm theo tên sản phẩm"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"title": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					}
+				}
+			}
+		},
+		"/products/{id}": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "includeDeleted",
+						"in": "query",
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/products/soft-delete/{id}": {
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/products/restore/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/variants/{productId}": {
+			"get": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "productId",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/variants/": {
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"productId": {
+									"example": "any"
+								},
+								"attributes": {
+									"example": "any"
+								},
+								"price": {
+									"example": "any"
+								},
+								"stock": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					}
+				}
+			}
+		},
+		"/variants/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"productId": {
+									"example": "any"
+								},
+								"attributes": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/variants/soft-delete/{id}": {
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/variants/restore/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					}
+				}
+			}
+		},
+		"/attributes/": {
+			"get": {
+				"description": "",
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					},
+					"400": {
+						"description": "Bad Request"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			}
+		},
+		"/attributes/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"404": {
+						"description": "Not Found"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"404": {
+						"description": "Not Found"
+					}
+				}
+			}
+		},
+		"/attribute-values/": {
+			"get": {
+				"description": "",
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			},
+			"post": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"attributeId": {
+									"example": "any"
+								},
+								"value": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created"
+					},
+					"400": {
+						"description": "Bad Request"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			}
+		},
+		"/attribute-values/{id}": {
+			"patch": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"value": {
+									"example": "any"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"404": {
+						"description": "Not Found"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			},
+			"delete": {
+				"description": "",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK"
+					},
+					"404": {
+						"description": "Not Found"
+					},
+					"500": {
+						"description": "Internal Server Error"
+					}
+				}
+			}
+		},
+		"/auth/register": {
+			"post": {
+				"description": "Create a new user account and return access/refresh tokens",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"email": {
+									"type": "string",
+									"example": "user@example.com"
+								},
+								"password": {
+									"type": "string",
+									"example": "password123"
+								},
+								"name": {
+									"type": "string",
+									"example": "John Doe"
+								},
+								"address": {
+									"type": "string",
+									"example": "123 Street"
+								},
+								"phone": {
+									"type": "string",
+									"example": "1234567890"
+								},
+								"avatar": {
+									"type": "string",
+									"example": "https://example.com/avatar.jpg"
+								},
+								"date_of_birth": {
+									"type": "string",
+									"example": "1990-01-01"
+								},
+								"role": {
+									"type": "string",
+									"example": "user"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"201": {
+						"description": "Created",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 201
+								},
+								"message": {
+									"type": "string",
+									"example": "Đăng ký thành công"
+								},
+								"data": {
+									"type": "object",
+									"properties": {
+										"user": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"example": "507f1f77bcf86cd799439011"
+												},
+												"email": {
+													"type": "string",
+													"example": "user@example.com"
+												},
+												"role": {
+													"type": "string",
+													"example": "user"
+												}
+											}
+										},
+										"accessToken": {
+											"type": "string",
+											"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+										},
+										"refreshToken": {
+											"type": "string",
+											"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request"
+					}
+				}
+			}
+		},
+		"/auth/login": {
+			"post": {
+				"description": "Authenticate user and return access/refresh tokens",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"email": {
+									"type": "string",
+									"example": "user@example.com"
+								},
+								"password": {
+									"type": "string",
+									"example": "password123"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Đăng nhập thành công"
+								},
+								"data": {
+									"type": "object",
+									"properties": {
+										"user": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"example": "507f1f77bcf86cd799439011"
+												},
+												"email": {
+													"type": "string",
+													"example": "user@example.com"
+												},
+												"role": {
+													"type": "string",
+													"example": "user"
+												}
+											}
+										},
+										"accessToken": {
+											"type": "string",
+											"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+										},
+										"refreshToken": {
+											"type": "string",
+											"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+										}
+									}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized"
+					}
+				}
+			}
+		},
+		"/auth/logout": {
+			"post": {
+				"description": "Invalidate user tokens",
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Đăng xuất thành công"
+								},
+								"data": {
+									"type": "object",
+									"example": {}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized"
+					}
+				}
+			}
+		},
+		"/auth/refresh-token": {
+			"post": {
+				"description": "Generate new access token using refresh token",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"refreshToken": {
+									"type": "string",
+									"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Tạo access token mới thành công"
+								},
+								"data": {
+									"type": "object",
+									"properties": {
+										"accessToken": {
+											"type": "string",
+											"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+										}
+									}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized"
+					}
+				}
+			}
+		},
+		"/auth/forgot-password": {
+			"post": {
+				"description": "Send password reset email",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"email": {
+									"type": "string",
+									"example": "user@example.com"
+								}
+							}
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Email đặt lại mật khẩu đã được gửi"
+								},
+								"data": {
+									"type": "object",
+									"example": {}
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Not Found"
+					}
+				}
+			}
+		},
+		"/auth/reset-password/{resetToken}": {
+			"get": {
+				"description": "Validate reset password token",
+				"parameters": [
+					{
+						"name": "resetToken",
+						"in": "path",
+						"required": true,
+						"type": "string"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Token hợp lệ"
+								},
+								"data": {
+									"type": "object",
+									"example": {}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request"
+					}
+				}
+			}
+		},
+		"/auth/profile": {
+			"get": {
+				"description": "Retrieve authenticated user information",
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "object",
+							"properties": {
+								"success": {
+									"type": "boolean",
+									"example": true
+								},
+								"statusCode": {
+									"type": "integer",
+									"example": 200
+								},
+								"message": {
+									"type": "string",
+									"example": "Lấy thông tin người dùng thành công"
+								},
+								"data": {
+									"type": "object",
+									"properties": {
+										"user": {
+											"type": "object",
+											"properties": {
+												"id": {
+													"type": "string",
+													"example": "507f1f77bcf86cd799439011"
+												},
+												"email": {
+													"type": "string",
+													"example": "user@example.com"
+												},
+												"name": {
+													"type": "string",
+													"example": "John Doe"
+												},
+												"address": {
+													"type": "string",
+													"example": "123 Street"
+												},
+												"phone": {
+													"type": "string",
+													"example": "1234567890"
+												},
+												"avatar": {
+													"type": "string",
+													"example": "https://example.com/avatar.jpg"
+												},
+												"date_of_birth": {
+													"type": "string",
+													"example": "1990-01-01"
+												},
+												"role": {
+													"type": "string",
+													"example": "user"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Unauthorized"
+					}
+				}
+			}
+		}
+	}
 }
