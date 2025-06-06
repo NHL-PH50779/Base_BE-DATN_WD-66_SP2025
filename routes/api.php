@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ReturnRequestController;
 use App\Http\Controllers\Api\RefundController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\NewsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -56,3 +57,6 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('products/search', [ProductController::class, 'search']);
 Route::get('/products/trashed', [ProductController::class, 'trashed']);
 Route::apiResource('products', ProductController::class);
+// ql tintuc
+Route::apiResource('news', \App\Http\Controllers\Api\NewsController::class);
+
