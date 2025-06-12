@@ -10,15 +10,18 @@ use Illuminate\Support\Facades\Validator;
 class ProductController extends Controller
 {
     // Lấy danh sách tất cả sản phẩm cùng biến thể
-    public function index()
-    {
-        $products = Product::with('variants')->get();
+   public function index()
+{
+    $products = Product::with([
+        'variants.attributeValues.attribute'
+    ])->get();
 
-        return response()->json([
-            'message' => 'Danh sách sản phẩm',
-            'data' => $products
-        ]);
-    }
+    return response()->json([
+        'message' => 'Danh sách sản phẩm',
+        'data' => $products
+    ]);
+}
+
 
     // Tìm kiếm sản phẩm theo từ khóa
     public function search(Request $request)
@@ -118,18 +121,20 @@ class ProductController extends Controller
 
     // Xem chi tiết sản phẩm (kèm biến thể)
     public function show($id)
-    {
-        $product = Product::withTrashed()->with('variants')->find($id);
+{
+    $product = Product::withTrashed()
+        ->with(['variants.attributeValues.attribute'])
+        ->find($id);
 
-        if (!$product) {
-            return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
-        }
-
-        return response()->json([
-            'message' => 'Chi tiết sản phẩm',
-            'data' => $product
-        ]);
+    if (!$product) {
+        return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
     }
+
+    return response()->json([
+        'message' => 'Chi tiết sản phẩm',
+        'data' => $product
+    ]);
+}
 
     // Xóa mềm sản phẩm
     public function destroy($id)
@@ -144,17 +149,6 @@ class ProductController extends Controller
 
         return response()->json(['message' => 'Xóa (mềm) sản phẩm thành công']);
     }
-
-    // Xem danh sách sản phẩm đã xóa
-    public function trashed()
-{
-    $products = Product::onlyTrashed()->with('variants')->get();
-
-    return response()->json([
-        'message' => 'Danh sách sản phẩm đã xóa mềm',
-        'data' => $products
-    ]);
-}
 
 
     // Khôi phục sản phẩm
@@ -191,37 +185,16 @@ class ProductController extends Controller
             'data' => $product
         ]);
     }
-    // Thêm biến thể cho sản phẩm
-    public function addVariant(Request $request, $productId)
+
+// Xem danh sách sản phẩm đã xóa (có nền trạng thái is_deleted = true)
+public function trashed()
 {
-    $product = Product::find($productId);
-
-    if (!$product) {
-        return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
-    }
-
-    // Validate dữ liệu biến thể
-    $validator = Validator::make($request->all(), [
-        'name' => 'required|string|max:255',
-        'price' => 'required|numeric|min:0',
-        'quantity' => 'required|integer|min:0',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'message' => 'Dữ liệu không hợp lệ',
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    // Tạo biến thể
-    $variant = $product->variants()->create($validator->validated());
+    $products = Product::onlyTrashed()->with('variants')->get();
 
     return response()->json([
-        'message' => 'Thêm biến thể thành công',
-        'data' => $variant
-    ], 201);
+        'message' => 'Danh sách sản phẩm đã xóa',
+        'data' => $products
+    ]);
 }
-// Xem danh sách sản phẩm đã xóa (có nền trạng thái is_deleted = true)
 
 }

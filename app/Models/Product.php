@@ -14,8 +14,10 @@ class Product extends Model
     protected $fillable = [ 'name', 'description', 'brand_id', 'category_id', 'thumbnail', 'is_active' ];
 
     public $timestamps = false; // Nếu bạn không sử dụng created_at, updated_at
-    public function variants()
+
+
+   public function variants()
 {
-    return $this->hasMany(ProductVariant::class); // KHÔNG withTrashed ở đây
+    return $this->hasMany(ProductVariant::class);
 }
 }
