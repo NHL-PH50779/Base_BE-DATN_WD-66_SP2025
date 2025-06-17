@@ -1,82 +1,90 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ReturnRequestController;
-use App\Http\Controllers\Api\RefundController;
-use App\Http\Controllers\Api\ProductController;
-
-use App\Http\Controllers\Api\ProductVariantController;
-use App\Http\Controllers\Api\AttributeController;
-use App\Http\Controllers\Api\AttributeValueController;
-use App\Http\Controllers\Api\BrandController;
-use App\Http\Controllers\Api\CategoryController;
 use Illuminate\Http\Request;
-// Lấy thông tin user đăng nhập
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\{
+    AuthController,
+    ProductController,
+    ProductVariantController,
+    AttributeController,
+    AttributeValueController,
+    BrandController,
+    CategoryController,
+    ReturnRequestController,
+    RefundController,
+    NewsController
+};
 
-// Return requests & Refunds
-Route::apiResource('return_requests', ReturnRequestController::class);
-Route::apiResource('refunds', RefundController::class);
-
-// Product routes
-Route::get('products/search', [ProductController::class, 'search']);
-Route::apiResource('products', ProductController::class);
-Route::get('/products/trashed', [ProductController::class, 'trashed']);
-Route::put('/products/restore/{id}', [ProductController::class, 'restore']);
-Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
-
-// Product variants
-Route::get('products/{productId}/variants', [ProductVariantController::class, 'index']);
-Route::post('products/{productId}/variants', [ProductVariantController::class, 'store']);
-Route::delete('variants/{id}', [ProductVariantController::class, 'destroy']);
-
-// Attribute routes
-Route::apiResource('attributes', AttributeController::class);
-Route::apiResource('attribute-values', AttributeValueController::class);
-=======
-use App\Http\Controllers\Api\NewsController;
-
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
-
-
-// Public routes
+// ✅ Route công khai (không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-// Protected routes
+Route::get('/products/search', [ProductController::class, 'search']);
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
+
+Route::get('/brands', [BrandController::class, 'index']);
+Route::get('/categories', [CategoryController::class, 'index']);
+
+Route::get('/news', [NewsController::class, 'index']);
+Route::get('/news/{id}', [NewsController::class, 'show']);
+
+// ✅ Route cần xác thực (auth:sanctum)
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Thông tin user đăng nhập
     Route::get('/user', [AuthController::class, 'user']);
-    
-    // Routes chỉ dành cho admin
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Quản lý sản phẩm (yêu cầu đăng nhập)
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+    Route::get('/products/trashed', [ProductController::class, 'trashed']);
+    Route::put('/products/restore/{id}', [ProductController::class, 'restore']);
+    Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
+
+    // Quản lý biến thể sản phẩm
+    Route::get('/products/{productId}/variants', [ProductVariantController::class, 'index']);
+    Route::post('/products/{productId}/variants', [ProductVariantController::class, 'store']);
+    Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
+
+    // Quản lý yêu cầu hoàn hàng và hoàn tiền
+    Route::apiResource('return_requests', ReturnRequestController::class);
+    Route::apiResource('refunds', RefundController::class);
+
+    // ✅ Route chỉ dành cho admin
     Route::middleware('admin')->group(function () {
+
+        // Quản lý tài khoản người dùng
         Route::get('/admin/users', function () {
             return response()->json(['users' => \App\Models\User::all()]);
         });
+
+        // Quản lý thương hiệu và danh mục
+        Route::post('/brands', [BrandController::class, 'store']);
+        Route::post('/categories', [CategoryController::class, 'store']);
+
+        // Quản lý thuộc tính sản phẩm
+        Route::apiResource('attributes', AttributeController::class);
+        Route::apiResource('attribute-values', AttributeValueController::class);
+
+        // Quản lý tin tức
+        Route::post('/news', [NewsController::class, 'store']);
+        Route::put('/news/{id}', [NewsController::class, 'update']);
+        Route::delete('/news/{id}', [NewsController::class, 'destroy']);
     });
-  
+
+    // Route kiểm tra token + quyền
     Route::get('/protected', function () {
         return response()->json([
             'message' => 'Đây là route được bảo vệ',
             'user_role' => auth()->user()->role
         ]);
     });
-
-    
 });
 
-// Các routes cho sản phẩm không cần xác thực 
-
-// ql tintuc
-Route::apiResource('news', \App\Http\Controllers\Api\NewsController::class);
-
-// Brand & Category
-Route::apiResource('brands', BrandController::class)->only(['index', 'store']);
-Route::apiResource('categories', CategoryController::class)->only(['index', 'store']);
+// ✅ Route fallback user nếu cần
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
+});
