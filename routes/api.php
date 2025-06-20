@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Http\Request;
@@ -13,7 +14,9 @@ use App\Http\Controllers\Api\{
     ReturnRequestController,
     RefundController,
     NewsController,
-    CartController // Thêm CartController
+    CartController 
+    BannerController
+
 };
 
 // ✅ Route công khai (không cần đăng nhập)
@@ -78,6 +81,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/news', [NewsController::class, 'store']);
         Route::put('/news/{id}', [NewsController::class, 'update']);
         Route::delete('/news/{id}', [NewsController::class, 'destroy']);
+      
+      
+        //Quản lí banner
+        Route::apiResource('banners', BannerController::class);
     });
 
     // Route kiểm tra token + quyền
@@ -87,4 +94,16 @@ Route::middleware('auth:sanctum')->group(function () {
             'user_role' => auth()->user()->role
         ]);
     });
+
 });
+
+});
+
+// ✅ Route fallback user nếu cần
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
+});
+
+
+
+
