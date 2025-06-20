@@ -61,7 +61,7 @@ class ProductController extends Controller
         'variants.*.Name' => 'required|string|max:255', // Uppercase N
         'variants.*.price' => 'required|numeric|min:0',
         'variants.*.stock' => 'required|integer|min:0',
-        'variants.*.is_active' => 'boolean',
+
 
         // Optional: attributes inside each variant
         'variants.*.attributes' => 'array',
@@ -85,7 +85,6 @@ class ProductController extends Controller
                 'Name' => $variantData['Name'],
                 'price' => $variantData['price'],
                 'stock' => $variantData['stock'],
-                'is_active' => $variantData['is_active'] ?? true,
             ]);
 
             // Attach attribute values

@@ -36,7 +36,6 @@ Route::delete('variants/{id}', [ProductVariantController::class, 'destroy']);
 // Attribute routes
 Route::apiResource('attributes', AttributeController::class);
 Route::apiResource('attribute-values', AttributeValueController::class);
-=======
 use App\Http\Controllers\Api\NewsController;
 
 /*
