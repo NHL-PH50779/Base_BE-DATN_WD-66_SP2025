@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 <?php
 
 use Illuminate\Http\Request;
@@ -14,7 +14,9 @@ use App\Http\Controllers\Api\{
     ReturnRequestController,
     RefundController,
     NewsController,
+    CartController 
     BannerController
+
 };
 
 // ✅ Route công khai (không cần đăng nhập)
@@ -33,10 +35,15 @@ Route::get('/news/{id}', [NewsController::class, 'show']);
 
 // ✅ Route cần xác thực (auth:sanctum)
 Route::middleware('auth:sanctum')->group(function () {
-
     // Thông tin user đăng nhập
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Giỏ hàng
+    Route::get('/cart', [CartController::class, 'index']);
+    Route::post('/cart', [CartController::class, 'store']);
+    Route::put('/cart/{id}', [CartController::class, 'update']);
+    Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
     // Quản lý sản phẩm (yêu cầu đăng nhập)
     Route::post('/products', [ProductController::class, 'store']);
@@ -57,7 +64,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ✅ Route chỉ dành cho admin
     Route::middleware('admin')->group(function () {
-
         // Quản lý tài khoản người dùng
         Route::get('/admin/users', function () {
             return response()->json(['users' => \App\Models\User::all()]);
@@ -75,6 +81,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/news', [NewsController::class, 'store']);
         Route::put('/news/{id}', [NewsController::class, 'update']);
         Route::delete('/news/{id}', [NewsController::class, 'destroy']);
+      
+      
+        //Quản lí banner
+        Route::apiResource('banners', BannerController::class);
     });
 
     // Route kiểm tra token + quyền
@@ -84,6 +94,9 @@ Route::middleware('auth:sanctum')->group(function () {
             'user_role' => auth()->user()->role
         ]);
     });
+
+});
+
 });
 
 // ✅ Route fallback user nếu cần
@@ -92,4 +105,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
-Route::apiResource('banners', BannerController::class);
+
+
