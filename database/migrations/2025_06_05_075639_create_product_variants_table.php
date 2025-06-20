@@ -11,7 +11,8 @@ return new class extends Migration {
     $table->id();
     $table->foreignId('product_id')->constrained()->onDelete('cascade');
     $table->string('sku')->unique()->nullable(); // Mã SKU riêng cho biến thể
-    $table->string('name');
+    $table->string('Name')->nullable(false); // Chữ hoa N, NOT NULL
+$table->integer('stock')->default(0);
     $table->decimal('price', 12, 2);
     $table->integer('quantity')->default(0);
     $table->boolean('is_active')->default(true); // trạng thái biến thể có hoạt động hay không

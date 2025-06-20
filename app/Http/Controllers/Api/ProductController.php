@@ -46,42 +46,62 @@ class ProductController extends Controller
     }
 
     // Tạo mới sản phẩm
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'description' => 'nullable',
-            'brand_id' => 'required|exists:brands,id',
-            'category_id' => 'required|exists:categories,id',
-            'thumbnail' => 'nullable|url',
-            'variants' => 'nullable|array',
-            'variants.*.name' => 'required|string|max:255',
-            'variants.*.price' => 'required|numeric|min:0',
-            'variants.*.quantity' => 'required|integer|min:0',
-        ]);
+   public function store(Request $request)
+{
+    // Validate input
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'description' => 'nullable|string',
+        'brand_id' => 'required|exists:brands,id',
+        'category_id' => 'required|exists:categories,id',
+        'is_active' => 'boolean',
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Dữ liệu không hợp lệ',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        'variants' => 'array',
+        'variants.*.sku' => 'required|string|unique:product_variants,sku',
+        'variants.*.Name' => 'required|string|max:255', // Uppercase N
+        'variants.*.price' => 'required|numeric|min:0',
+        'variants.*.stock' => 'required|integer|min:0',
+        'variants.*.is_active' => 'boolean',
 
-        $product = Product::create($request->only([
-            'name', 'description', 'brand_id', 'category_id', 'thumbnail'
-        ]));
+        // Optional: attributes inside each variant
+        'variants.*.attributes' => 'array',
+        'variants.*.attributes.*.value_id' => 'integer|exists:attribute_values,id',
+    ]);
 
-        if ($request->has('variants')) {
-            foreach ($request->input('variants') as $variant) {
-                $product->variants()->create($variant);
+    // Create Product
+    $product = Product::create([
+        'name' => $validated['name'],
+        'description' => $validated['description'] ?? null,
+        'brand_id' => $validated['brand_id'],
+        'category_id' => $validated['category_id'],
+        'is_active' => $validated['is_active'] ?? true,
+    ]);
+
+    // Create Variants
+    if (!empty($validated['variants'])) {
+        foreach ($validated['variants'] as $variantData) {
+            $variant = $product->variants()->create([
+                'sku' => $variantData['sku'],
+                'Name' => $variantData['Name'],
+                'price' => $variantData['price'],
+                'stock' => $variantData['stock'],
+                'is_active' => $variantData['is_active'] ?? true,
+            ]);
+
+            // Attach attribute values
+            if (!empty($variantData['attributes'])) {
+                foreach ($variantData['attributes'] as $attr) {
+                    if (!empty($attr['value_id'])) {
+                        $variant->attributeValues()->attach($attr['value_id']);
+                    }
+                }
             }
         }
-
-        return response()->json([
-            'message' => 'Tạo sản phẩm thành công',
-            'data' => $product->load('variants')
-        ], 201);
     }
+
+    return response()->json($product->load('variants.attributeValues'), 201);
+}
+
 
     // Cập nhật sản phẩm
     public function update(Request $request, $id)
