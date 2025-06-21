@@ -14,6 +14,7 @@ return new class extends Migration {
             $table->unsignedBigInteger('brand_id');
             $table->unsignedBigInteger('category_id');
             $table->string('thumbnail', 255)->nullable();
+            $table->string('cloudinary_public_id')->nullable();
 
             // created_at và updated_at theo kiểu thủ công
             $table->timestamp('created_at')->default(DB::raw('CURRENT_TIMESTAMP'));

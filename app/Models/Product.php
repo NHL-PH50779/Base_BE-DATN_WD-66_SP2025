@@ -11,7 +11,7 @@ class Product extends Model
     use SoftDeletes;
     protected $dates = ['deleted_at']; // Không bắt buộc nếu dùng Laravel 8+
 
-    protected $fillable = [ 'name', 'description', 'brand_id', 'category_id', 'thumbnail', 'is_active' ];
+    protected $fillable = [ 'name', 'description', 'brand_id', 'category_id', 'thumbnail','cloudinary_public_id', 'is_active' ];
 
     public $timestamps = false; // Nếu bạn không sử dụng created_at, updated_at
 

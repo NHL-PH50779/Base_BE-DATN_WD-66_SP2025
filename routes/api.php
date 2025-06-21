@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Http\Request;
@@ -14,12 +13,12 @@ use App\Http\Controllers\Api\{
     ReturnRequestController,
     RefundController,
     NewsController,
-    CartController 
+    CartController,
+    OrderController,
     BannerController
-
 };
 
-// ✅ Route công khai (không cần đăng nhập)
+// ✅ Public Routes (Không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -33,9 +32,8 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{id}', [NewsController::class, 'show']);
 
-// ✅ Route cần xác thực (auth:sanctum)
+// ✅ Client Routes (Yêu cầu đăng nhập)
 Route::middleware('auth:sanctum')->group(function () {
-    // Thông tin user đăng nhập
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -45,7 +43,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cart/{id}', [CartController::class, 'update']);
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
-    // Quản lý sản phẩm (yêu cầu đăng nhập)
+    // Yêu cầu hoàn hàng và hoàn tiền
+    Route::apiResource('return_requests', ReturnRequestController::class);
+    Route::apiResource('refunds', RefundController::class);
+
+    // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
+    Route::post('/orders/checkout', [OrderController::class, 'checkout']);
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
+});
+
+// ✅ Admin Routes
+Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    // Quản lý tài khoản người dùng
+    Route::get('/admin/users', function () {
+        return response()->json(['users' => \App\Models\User::all()]);
+    });
+
+    // Quản lý sản phẩm
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
@@ -53,57 +67,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/products/restore/{id}', [ProductController::class, 'restore']);
     Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
 
-    // Quản lý biến thể sản phẩm
+    // Biến thể sản phẩm
     Route::get('/products/{productId}/variants', [ProductVariantController::class, 'index']);
     Route::post('/products/{productId}/variants', [ProductVariantController::class, 'store']);
     Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
 
-    // Quản lý yêu cầu hoàn hàng và hoàn tiền
-    Route::apiResource('return_requests', ReturnRequestController::class);
-    Route::apiResource('refunds', RefundController::class);
+    // Thương hiệu, danh mục
+    Route::apiResource('brands', BrandController::class);
+    Route::apiResource('categories', CategoryController::class);
 
-    // ✅ Route chỉ dành cho admin
-    Route::middleware('admin')->group(function () {
-        // Quản lý tài khoản người dùng
-        Route::get('/admin/users', function () {
-            return response()->json(['users' => \App\Models\User::all()]);
-        });
+    // Thuộc tính sản phẩm
+    Route::apiResource('attributes', AttributeController::class);
+    Route::apiResource('attribute-values', AttributeValueController::class);
 
-        // Quản lý thương hiệu và danh mục
-        Route::post('/brands', [BrandController::class, 'store']);
-        Route::post('/categories', [CategoryController::class, 'store']);
+    // Tin tức
+    Route::post('/news', [NewsController::class, 'store']);
+    Route::put('/news/{id}', [NewsController::class, 'update']);
+    Route::delete('/news/{id}', [NewsController::class, 'destroy']);
 
-        // Quản lý thuộc tính sản phẩm
-        Route::apiResource('attributes', AttributeController::class);
-        Route::apiResource('attribute-values', AttributeValueController::class);
-
-        // Quản lý tin tức
-        Route::post('/news', [NewsController::class, 'store']);
-        Route::put('/news/{id}', [NewsController::class, 'update']);
-        Route::delete('/news/{id}', [NewsController::class, 'destroy']);
-      
-      
-        //Quản lí banner
-        Route::apiResource('banners', BannerController::class);
-    });
-
-    // Route kiểm tra token + quyền
-    Route::get('/protected', function () {
-        return response()->json([
-            'message' => 'Đây là route được bảo vệ',
-            'user_role' => auth()->user()->role
-        ]);
-    });
-
+    // Quản lý banner
+    Route::apiResource('banners', BannerController::class);
 });
 
-});
 
-// ✅ Route fallback user nếu cần
+
+// ✅ Route fallback
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-
-
-
-
