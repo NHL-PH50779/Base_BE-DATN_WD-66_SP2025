@@ -3,6 +3,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Cart;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -11,37 +12,41 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'nullable|in:client,admin', // Mặc định là client nếu không truyền
-        ]);
+   public function register(Request $request)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users',
+        'password' => 'required|string|min:8|confirmed',
+        'role' => 'nullable|in:client,admin',
+    ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => $request->role ?? 'client', // Mặc định là client
-        ]);
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+        'role' => $request->role ?? 'client',
+    ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+    // ✅ Tạo giỏ hàng sau khi đăng ký
+    Cart::create(['user_id' => $user->id]);
 
-        return response()->json([
-            'message' => 'Đăng ký thành công',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'created_at' => $user->created_at,
-            ],
-            'token' => $token,
-            'token_type' => 'Bearer'
-        ], 201);
-    }
+    $token = $user->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'message' => 'Đăng ký thành công',
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'created_at' => $user->created_at,
+        ],
+        'token' => $token,
+        'token_type' => 'Bearer'
+    ], 201);
+}
+
 
     public function login(Request $request)
     {

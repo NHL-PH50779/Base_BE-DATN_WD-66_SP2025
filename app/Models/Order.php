@@ -23,4 +23,8 @@ class Order extends Model
     {
         return $this->hasMany(ReturnRequest::class);
     }
+    public function items()
+{
+    return $this->hasMany(OrderItem::class);
+}
 }
