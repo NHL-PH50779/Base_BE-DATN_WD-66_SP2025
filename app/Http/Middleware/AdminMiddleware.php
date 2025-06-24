@@ -1,5 +1,4 @@
 <?php
-// app/Http/Middleware/AdminMiddleware.php
 
 namespace App\Http\Middleware;
 
@@ -12,9 +11,16 @@ class AdminMiddleware
     {
         $user = auth('sanctum')->user();
         
-        if (!$user || !$user->isAdmin()) {
+        if (!$user) {
             return response()->json([
-                'message' => 'Không có quyền truy cập'
+                'message' => 'Vui lòng đăng nhập'
+            ], 401);
+        }
+
+        // Kiểm tra role admin
+        if ($user->role !== 'admin') {
+            return response()->json([
+                'message' => 'Bạn không có quyền admin'
             ], 403);
         }
 

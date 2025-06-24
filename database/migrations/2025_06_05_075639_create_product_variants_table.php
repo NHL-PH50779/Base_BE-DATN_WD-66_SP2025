@@ -6,11 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void
-    { 
-         if (Schema::hasTable('personal_access_tokens')) {
-        return;
-    }
-
+    {
         Schema::create('product_variants', function (Blueprint $table) {
     $table->id();
     $table->foreignId('product_id')->constrained()->onDelete('cascade');

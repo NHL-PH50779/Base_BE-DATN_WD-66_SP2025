@@ -11,14 +11,13 @@ return new class extends Migration
      */
 public function up()
 {
-    Schema::table('product_variants', function (Blueprint $table) {
-        $table->softDeletes();
-    });
+    // Skip - products table already has softDeletes in create migration
+    return;
 }
 
 public function down()
 {
-    Schema::table('product_variants', function (Blueprint $table) {
+    Schema::table('products', function (Blueprint $table) {
         $table->dropSoftDeletes();
     });
 }

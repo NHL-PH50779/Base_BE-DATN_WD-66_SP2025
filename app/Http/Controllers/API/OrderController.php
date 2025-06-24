@@ -14,7 +14,11 @@ class OrderController extends Controller
 {
     public function checkout(Request $request)
     {
-        $user = $request->user();
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
+        
         $cart = Cart::with('items')->where('user_id', $user->id)->first();
 
         if (!$cart || $cart->items->isEmpty()) {
@@ -79,7 +83,7 @@ try {
 {
     $order = Order::with([
         'items.product',
-        'items.productVariant.attributeValues'
+        'items.productVariant'
     ])->find($id);
 
     if (!$order) {
@@ -102,6 +106,100 @@ try {
             'items' => $order->items,
             'total' => $order->total
         ]
+    ]);
+}
+
+// ===== ADMIN METHODS =====
+
+// Xem tất cả đơn hàng (Admin)
+public function index()
+{
+    $user = auth('sanctum')->user();
+    
+    // Debug thông tin user
+    \Log::info('Admin Orders - User info:', [
+        'user' => $user ? $user->toArray() : null,
+        'role' => $user ? $user->role : null,
+        'is_admin' => $user && $user->role === 'admin'
+    ]);
+    
+    if (!$user) {
+        return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+    }
+    
+    if ($user->role !== 'admin') {
+        return response()->json(['message' => 'Không có quyền admin'], 403);
+    }
+
+    $orders = Order::with(['user', 'items.product', 'items.productVariant'])
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+    return response()->json([
+        'message' => 'Danh sách đơn hàng',
+        'data' => $orders
+    ]);
+}
+
+// Cập nhật trạng thái đơn hàng (Admin)
+public function updateStatus(Request $request, $id)
+{
+    $user = auth('sanctum')->user();
+    if (!$user || $user->role !== 'admin') {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+
+    $order = Order::findOrFail($id);
+    
+    $validated = $request->validate([
+        'order_status_id' => 'required|integer|min:1|max:5',
+        'payment_status_id' => 'required|integer|min:1|max:3'
+    ]);
+
+    $order->update($validated);
+
+    return response()->json([
+        'message' => 'Cập nhật trạng thái thành công',
+        'data' => $order->load(['user', 'items.product'])
+    ]);
+}
+
+// Xem chi tiết đơn hàng (Admin)
+public function adminShow($id)
+{
+    $user = auth('sanctum')->user();
+    if (!$user || $user->role !== 'admin') {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+
+    $order = Order::with([
+        'user',
+        'items.product',
+        'items.productVariant'
+    ])->findOrFail($id);
+
+    return response()->json([
+        'message' => 'Chi tiết đơn hàng',
+        'data' => $order
+    ]);
+}
+
+// Lấy danh sách đơn hàng của user hiện tại
+public function myOrders()
+{
+    $user = auth('sanctum')->user();
+    if (!$user) {
+        return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+    }
+
+    $orders = Order::with(['items.product', 'items.productVariant'])
+        ->where('user_id', $user->id)
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+    return response()->json([
+        'message' => 'Danh sách đơn hàng của bạn',
+        'data' => $orders
     ]);
 }
 

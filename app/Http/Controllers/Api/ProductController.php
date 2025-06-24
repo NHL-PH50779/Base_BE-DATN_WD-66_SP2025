@@ -15,9 +15,9 @@ class ProductController extends Controller
     // Lấy danh sách tất cả sản phẩm cùng biến thể
    public function index()
 {
-    $products = Product::with([
-        'variants.attributeValues.attribute'
-    ])->get();
+    $products = Product::with(['variants', 'brand', 'category'])
+        ->where('is_active', true)
+        ->get();
 
     return response()->json([
         'message' => 'Danh sách sản phẩm',
@@ -57,18 +57,16 @@ class ProductController extends Controller
         'description' => 'nullable|string',
         'brand_id' => 'required|exists:brands,id',
         'category_id' => 'required|exists:categories,id',
+        'thumbnail' => 'nullable|string',
         'is_active' => 'boolean',
 
         'variants' => 'array',
         'variants.*.sku' => 'required|string|unique:product_variants,sku',
-        'variants.*.Name' => 'required|string|max:255', // Uppercase N
+        'variants.*.Name' => 'required|string|max:255',
         'variants.*.price' => 'required|numeric|min:0',
         'variants.*.stock' => 'required|integer|min:0',
+        'variants.*.quantity' => 'integer|min:0',
         'variants.*.is_active' => 'boolean',
-
-        // Optional: attributes inside each variant
-        'variants.*.attributes' => 'array',
-        'variants.*.attributes.*.value_id' => 'integer|exists:attribute_values,id',
     ]);
 
     // Create Product
@@ -77,6 +75,7 @@ class ProductController extends Controller
         'description' => $validated['description'] ?? null,
         'brand_id' => $validated['brand_id'],
         'category_id' => $validated['category_id'],
+        'thumbnail' => $validated['thumbnail'] ?? null,
         'is_active' => $validated['is_active'] ?? true,
     ]);
 
@@ -88,21 +87,13 @@ class ProductController extends Controller
                 'Name' => $variantData['Name'],
                 'price' => $variantData['price'],
                 'stock' => $variantData['stock'],
+                'quantity' => $variantData['quantity'] ?? 0,
                 'is_active' => $variantData['is_active'] ?? true,
             ]);
-
-            // Attach attribute values
-            if (!empty($variantData['attributes'])) {
-                foreach ($variantData['attributes'] as $attr) {
-                    if (!empty($attr['value_id'])) {
-                        $variant->attributeValues()->attach($attr['value_id']);
-                    }
-                }
-            }
         }
     }
 
-    return response()->json($product->load('variants.attributeValues'), 201);
+    return response()->json($product->load('variants'), 201);
 }
 
 
@@ -116,7 +107,8 @@ class ProductController extends Controller
         'description' => 'nullable|string',
         'brand_id' => 'sometimes|required|exists:brands,id',
         'category_id' => 'sometimes|required|exists:categories,id',
-        'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        'thumbnail' => 'nullable|string', // Chấp nhận URL string
+        'is_active' => 'sometimes|boolean',
     ]);
 
     if ($validator->fails()) {
@@ -128,10 +120,9 @@ class ProductController extends Controller
 
     $data = $validator->validated();
 
-    // Nếu có ảnh mới, upload lại
-    if ($request->hasFile('thumbnail')) {
-        $path = $request->file('thumbnail')->store('products', 'public');
-        $data['thumbnail'] = asset('storage/' . $path);
+    // Nếu có ảnh mới (URL), cập nhật
+    if ($request->has('thumbnail') && $request->thumbnail) {
+        $data['thumbnail'] = $request->thumbnail;
     }
 
     $product->update($data);
@@ -147,7 +138,7 @@ class ProductController extends Controller
     public function show($id)
 {
     $product = Product::withTrashed()
-        ->with(['variants.attributeValues.attribute'])
+        ->with('variants')
         ->find($id);
 
     if (!$product) {

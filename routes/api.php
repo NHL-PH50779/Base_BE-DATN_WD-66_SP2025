@@ -15,12 +15,20 @@ use App\Http\Controllers\Api\{
     NewsController,
     CartController,
     OrderController,
-    BannerController
+    BannerController,
+    UploadController,
+    UserController,
+    DashboardController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::middleware('cors')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
+});
+
+// Upload route (cần đăng nhập)
+Route::middleware('auth:sanctum')->post('/upload', [UploadController::class, 'uploadImage']);
 
 Route::get('/products/search', [ProductController::class, 'search']);
 Route::get('/products', [ProductController::class, 'index']);
@@ -28,6 +36,10 @@ Route::get('/products/{id}', [ProductController::class, 'show']);
 
 Route::get('/brands', [BrandController::class, 'index']);
 Route::get('/categories', [CategoryController::class, 'index']);
+
+// Attributes - public routes
+Route::get('/attributes', [AttributeController::class, 'index']);
+Route::get('/attribute-values', [AttributeValueController::class, 'index']);
 
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{id}', [NewsController::class, 'show']);
@@ -49,12 +61,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
+    Route::get('/orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
 });
 
 // ✅ Admin Routes
 Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Quản lý tài khoản người dùng
+    Route::get('/users', function () {
+        return response()->json(['users' => \App\Models\User::all()]);
+    });
     Route::get('/admin/users', function () {
         return response()->json(['users' => \App\Models\User::all()]);
     });
@@ -70,11 +86,17 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Biến thể sản phẩm
     Route::get('/products/{productId}/variants', [ProductVariantController::class, 'index']);
     Route::post('/products/{productId}/variants', [ProductVariantController::class, 'store']);
+    Route::put('/variants/{id}', [ProductVariantController::class, 'update']);
     Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
 
-    // Thương hiệu, danh mục
-    Route::apiResource('brands', BrandController::class);
-    Route::apiResource('categories', CategoryController::class);
+    // Thương hiệu, danh mục - CRUD operations
+    Route::post('/brands', [BrandController::class, 'store']);
+    Route::put('/brands/{id}', [BrandController::class, 'update']);
+    Route::delete('/brands/{id}', [BrandController::class, 'destroy']);
+    
+    Route::post('/categories', [CategoryController::class, 'store']);
+    Route::put('/categories/{id}', [CategoryController::class, 'update']);
+    Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
     // Thuộc tính sản phẩm
     Route::apiResource('attributes', AttributeController::class);
@@ -87,6 +109,24 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     // Quản lý banner
     Route::apiResource('banners', BannerController::class);
+
+    // Dashboard stats
+    Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+
+    // Quản lý người dùng (Admin)
+    Route::apiResource('admin/users', UserController::class);
+    Route::get('/users', [UserController::class, 'index']); // Backup route
+
+    // Quản lý đơn hàng (Admin)
+    Route::get('/admin/orders', [OrderController::class, 'index']);
+    Route::get('/orders', [OrderController::class, 'index']); // Backup route
+    Route::get('/admin/orders/{id}', [OrderController::class, 'adminShow']);
+    Route::put('/admin/orders/{id}/status', [OrderController::class, 'updateStatus']);
+    Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']); // Backup route
+
+    // Quản lý giỏ hàng (Admin)
+    Route::get('/admin/carts', [CartController::class, 'adminIndex']);
+    Route::get('/admin/carts/{userId}', [CartController::class, 'adminShow']);
 });
 
 
