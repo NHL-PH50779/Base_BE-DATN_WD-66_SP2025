@@ -34,7 +34,8 @@ class CartController extends Controller
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
             'product_variant_id' => 'nullable|exists:product_variants,id',
-            'quantity' => 'required|integer|min:1'
+            'quantity' => 'required|integer|min:1',
+            'price' => 'nullable|numeric|min:0'
         ]);
 
         if ($validator->fails()) {
@@ -47,10 +48,12 @@ class CartController extends Controller
         $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
         $product = Product::findOrFail($request->product_id);
 
-        // Lấy giá từ biến thể nếu có, nếu không lấy từ sản phẩm
-        $price = $request->product_variant_id
-            ? ProductVariant::findOrFail($request->product_variant_id)->price
-            : $product->price ?? 0;
+        // Lấy giá từ request hoặc từ biến thể/sản phẩm
+        $price = $request->price ?? (
+            $request->product_variant_id
+                ? ProductVariant::findOrFail($request->product_variant_id)->price
+                : ($product->price ?? 0)
+        );
 
         // Kiểm tra tồn kho
         if ($request->product_variant_id) {
@@ -123,6 +126,45 @@ class CartController extends Controller
 
         return response()->json([
             'message' => 'Đã xóa mục khỏi giỏ hàng'
+        ]);
+    }
+
+    // ===== ADMIN METHODS =====
+
+    // Xem tất cả giỏ hàng (Admin)
+    public function adminIndex()
+    {
+        $carts = Cart::with(['user', 'items.product', 'items.productVariant'])
+            ->whereHas('items')
+            ->get();
+
+        return response()->json([
+            'message' => 'Danh sách giỏ hàng',
+            'data' => $carts
+        ]);
+    }
+
+    // Xem chi tiết giỏ hàng của user (Admin)
+    public function adminShow($userId)
+    {
+        $cart = Cart::with(['user', 'items.product', 'items.productVariant'])
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$cart) {
+            return response()->json([
+                'message' => 'Không tìm thấy giỏ hàng',
+                'data' => ['items' => [], 'total' => 0]
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Chi tiết giỏ hàng',
+            'data' => [
+                'cart' => $cart,
+                'items' => $cart->items,
+                'total' => $cart->items->sum(fn($item) => $item->quantity * $item->price)
+            ]
         ]);
     }
 }

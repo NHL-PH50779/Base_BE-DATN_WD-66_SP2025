@@ -3,11 +3,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductVariant extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     protected $fillable = [
     'product_id',
@@ -15,6 +14,7 @@ class ProductVariant extends Model
     'Name',      // Uppercase N
     'price',
     'stock',
+    'quantity',
     'is_active'
 ];
 

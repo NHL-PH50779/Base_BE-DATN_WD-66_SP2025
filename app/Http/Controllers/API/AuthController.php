@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/Api/AuthController.php
 
 namespace App\Http\Controllers\Api;
 
@@ -12,41 +11,36 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-   public function register(Request $request)
-{
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|string|email|max:255|unique:users',
-        'password' => 'required|string|min:8|confirmed',
-        'role' => 'nullable|in:client,admin',
-    ]);
+    public function register(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
 
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-        'role' => $request->role ?? 'client',
-    ]);
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
 
-    // ✅ Tạo giỏ hàng sau khi đăng ký
-    Cart::create(['user_id' => $user->id]);
+        Cart::create(['user_id' => $user->id]);
 
-    $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token')->plainTextToken;
 
-    return response()->json([
-        'message' => 'Đăng ký thành công',
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role,
-            'created_at' => $user->created_at,
-        ],
-        'token' => $token,
-        'token_type' => 'Bearer'
-    ], 201);
-}
-
+        return response()->json([
+            'message' => 'Đăng ký thành công',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => 'client',
+            ],
+            'token' => $token,
+            'token_type' => 'Bearer'
+        ], 201);
+    }
 
     public function login(Request $request)
     {
@@ -63,6 +57,10 @@ class AuthController extends Controller
             ]);
         }
 
+        // Danh sách admin
+        $adminEmails = ['admin@test.com', 'admin@admin.com'];
+        $isAdmin = in_array($user->email, $adminEmails);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -71,8 +69,7 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role,
-                'created_at' => $user->created_at,
+                'role' => $isAdmin ? 'admin' : 'client',
             ],
             'token' => $token,
             'token_type' => 'Bearer'
@@ -90,8 +87,17 @@ class AuthController extends Controller
 
     public function user(Request $request)
     {
+        $user = $request->user();
+        $adminEmails = ['admin@test.com', 'admin@admin.com'];
+        $isAdmin = in_array($user->email, $adminEmails);
+
         return response()->json([
-            'user' => $request->user()
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $isAdmin ? 'admin' : 'client',
+            ]
         ]);
     }
 }

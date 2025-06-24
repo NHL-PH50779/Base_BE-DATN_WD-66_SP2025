@@ -19,6 +19,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'cors' => \App\Http\Middleware\CorsMiddleware::class,
+        ]);
+
+        // Loại trừ API khỏi CSRF
+        $middleware->validateCsrfTokens(except: [
+            'api/*'
+        ]);
+
+        // Thêm CORS middleware
+        $middleware->web(append: [
+            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

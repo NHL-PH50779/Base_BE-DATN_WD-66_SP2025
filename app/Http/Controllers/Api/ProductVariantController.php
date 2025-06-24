@@ -1,50 +1,80 @@
 <?php
 
 namespace App\Http\Controllers\Api;
-use App\Http\Controllers\Controller;
 
-use App\Models\Product;
+use App\Http\Controllers\Controller;
 use App\Models\ProductVariant;
-use App\Models\AttributeValue;
+use App\Models\Product;
 use Illuminate\Http\Request;
 
 class ProductVariantController extends Controller
 {
-    // Lấy danh sách biến thể của sản phẩm
     public function index($productId)
     {
-        return ProductVariant::with('attributeValues')->where('product_id', $productId)->get();
+        $variants = ProductVariant::where('product_id', $productId)->get();
+        
+        return response()->json([
+            'message' => 'Danh sách biến thể',
+            'data' => $variants
+        ]);
     }
 
-    // Tạo biến thể mới
     public function store(Request $request, $productId)
     {
-        $data = $request->validate([
-            'sku' => 'required|unique:product_variants,sku',
-            'price' => 'required|numeric',
-            'stock' => 'required|integer',
-            'attribute_value_ids' => 'required|array'
+        $validated = $request->validate([
+            'sku' => 'required|string|unique:product_variants,sku',
+            'Name' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'quantity' => 'integer|min:0',
+            'is_active' => 'boolean',
         ]);
 
-        $variant = ProductVariant::create([
-            'product_id' => $productId,
-            'sku' => $data['sku'],
-            'price' => $data['price'],
-            'stock' => $data['stock']
+        $product = Product::findOrFail($productId);
+
+        $variant = $product->variants()->create([
+            'sku' => $validated['sku'],
+            'Name' => $validated['Name'],
+            'price' => $validated['price'],
+            'stock' => $validated['stock'],
+            'quantity' => $validated['quantity'] ?? 0,
+            'is_active' => $validated['is_active'] ?? true,
         ]);
 
-        $variant->attributeValues()->attach($data['attribute_value_ids']);
-
-        return response()->json(['message' => 'Variant created', 'variant' => $variant->load('attributeValues')]);
+        return response()->json([
+            'message' => 'Tạo biến thể thành công',
+            'data' => $variant
+        ], 201);
     }
 
-    // Xóa biến thể
+    public function update(Request $request, $id)
+    {
+        $variant = ProductVariant::findOrFail($id);
+
+        $validated = $request->validate([
+            'sku' => 'required|string|unique:product_variants,sku,' . $id,
+            'Name' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'quantity' => 'integer|min:0',
+            'is_active' => 'boolean',
+        ]);
+
+        $variant->update($validated);
+
+        return response()->json([
+            'message' => 'Cập nhật biến thể thành công',
+            'data' => $variant
+        ]);
+    }
+
     public function destroy($id)
     {
         $variant = ProductVariant::findOrFail($id);
-        $variant->attributeValues()->detach();
         $variant->delete();
 
-        return response()->json(['message' => 'Variant deleted']);
+        return response()->json([
+            'message' => 'Xóa biến thể thành công'
+        ]);
     }
 }
