@@ -14,13 +14,6 @@ class UserController extends Controller
     {
         $users = User::orderBy('created_at', 'desc')->get();
         
-        // Thêm role cho mỗi user
-        $users = $users->map(function ($user) {
-            $adminEmails = ['admin@test.com', 'admin@admin.com'];
-            $user->role = in_array($user->email, $adminEmails) ? 'admin' : 'client';
-            return $user;
-        });
-
         return response()->json([
             'message' => 'Danh sách người dùng',
             'data' => $users
@@ -33,7 +26,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,client'
+            'role' => 'required|in:admin,client,super_admin'
         ]);
 
         if ($validator->fails()) {
@@ -46,12 +39,9 @@ class UserController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password)
+            'password' => Hash::make($request->password),
+            'role' => $request->role
         ]);
-
-        // Thêm role
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        $user->role = in_array($user->email, $adminEmails) ? 'admin' : 'client';
 
         return response()->json([
             'message' => 'Thêm người dùng thành công',
@@ -68,10 +58,6 @@ class UserController extends Controller
                 'message' => 'Không tìm thấy người dùng'
             ], 404);
         }
-
-        // Thêm role
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        $user->role = in_array($user->email, $adminEmails) ? 'admin' : 'client';
 
         return response()->json([
             'message' => 'Chi tiết người dùng',
@@ -92,7 +78,8 @@ class UserController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $id,
-            'password' => 'nullable|string|min:6'
+            'password' => 'nullable|string|min:6',
+            'role' => 'nullable|in:admin,client,super_admin'
         ]);
 
         if ($validator->fails()) {
@@ -110,12 +97,12 @@ class UserController extends Controller
         if ($request->password) {
             $updateData['password'] = Hash::make($request->password);
         }
+        
+        if ($request->role) {
+            $updateData['role'] = $request->role;
+        }
 
         $user->update($updateData);
-
-        // Thêm role
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        $user->role = in_array($user->email, $adminEmails) ? 'admin' : 'client';
 
         return response()->json([
             'message' => 'Cập nhật người dùng thành công',
@@ -134,8 +121,7 @@ class UserController extends Controller
         }
 
         // Không cho phép xóa admin
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        if (in_array($user->email, $adminEmails)) {
+        if ($user->role === 'admin') {
             return response()->json([
                 'message' => 'Không thể xóa tài khoản admin'
             ], 400);

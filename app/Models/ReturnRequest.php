@@ -8,7 +8,7 @@ class ReturnRequest extends Model
 {
     
     protected $fillable = ['user_id', 'order_id', 'reason', 'status'];
-    public $timestamps = false;
+    public $timestamps = true;
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -17,8 +17,8 @@ class AdminMiddleware
             ], 401);
         }
 
-        // Kiểm tra role admin
-        if ($user->role !== 'admin') {
+        // Kiểm tra role admin hoặc super_admin
+        if ($user->role !== 'admin' && $user->role !== 'super_admin') {
             return response()->json([
                 'message' => 'Bạn không có quyền admin'
             ], 403);

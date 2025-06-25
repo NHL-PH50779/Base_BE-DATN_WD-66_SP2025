@@ -127,7 +127,7 @@ public function index()
         return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
     }
     
-    if ($user->role !== 'admin') {
+    if ($user->role !== 'admin' && $user->role !== 'super_admin') {
         return response()->json(['message' => 'Không có quyền admin'], 403);
     }
 
@@ -145,7 +145,7 @@ public function index()
 public function updateStatus(Request $request, $id)
 {
     $user = auth('sanctum')->user();
-    if (!$user || $user->role !== 'admin') {
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
         return response()->json(['message' => 'Không có quyền truy cập'], 403);
     }
 
@@ -168,7 +168,7 @@ public function updateStatus(Request $request, $id)
 public function adminShow($id)
 {
     $user = auth('sanctum')->user();
-    if (!$user || $user->role !== 'admin') {
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
         return response()->json(['message' => 'Không có quyền truy cập'], 403);
     }
 

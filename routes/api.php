@@ -18,7 +18,8 @@ use App\Http\Controllers\Api\{
     BannerController,
     UploadController,
     UserController,
-    DashboardController
+    DashboardController,
+    NotificationController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
@@ -59,9 +60,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('return_requests', ReturnRequestController::class);
     Route::apiResource('refunds', RefundController::class);
 
+    // Thông báo
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'getUnreadCount']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
-    Route::get('/orders', [OrderController::class, 'myOrders']);
+    Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
 });
 
@@ -123,6 +130,16 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/admin/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/admin/orders/{id}/status', [OrderController::class, 'updateStatus']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']); // Backup route
+
+    // Quản lý yêu cầu hoàn hàng (Admin)
+    Route::get('/admin/return-requests', [ReturnRequestController::class, 'index']);
+    Route::put('/admin/return-requests/{id}', [ReturnRequestController::class, 'update']);
+
+    // Thông báo admin
+    Route::get('/admin/notifications', [NotificationController::class, 'index']);
+    Route::put('/admin/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/admin/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::get('/admin/notifications/unread-count', [NotificationController::class, 'getUnreadCount']);
 
     // Quản lý giỏ hàng (Admin)
     Route::get('/admin/carts', [CartController::class, 'adminIndex']);

@@ -107,8 +107,15 @@ class ProductController extends Controller
         'description' => 'nullable|string',
         'brand_id' => 'sometimes|required|exists:brands,id',
         'category_id' => 'sometimes|required|exists:categories,id',
-        'thumbnail' => 'nullable|string', // Chấp nhận URL string
+        'thumbnail' => 'nullable|string',
         'is_active' => 'sometimes|boolean',
+        
+        // Thêm validation cho variants
+        'variants' => 'array',
+        'variants.*.sku' => 'required|string',
+        'variants.*.Name' => 'required|string|max:255',
+        'variants.*.price' => 'required|numeric|min:0',
+        'variants.*.stock' => 'required|integer|min:0',
     ]);
 
     if ($validator->fails()) {
@@ -125,11 +132,30 @@ class ProductController extends Controller
         $data['thumbnail'] = $request->thumbnail;
     }
 
+    // Cập nhật thông tin sản phẩm
     $product->update($data);
+
+    // Cập nhật variants nếu có
+    if ($request->has('variants') && is_array($request->variants)) {
+        foreach ($request->variants as $variantData) {
+            if (isset($variantData['id'])) {
+                // Cập nhật variant hiện có
+                $variant = $product->variants()->find($variantData['id']);
+                if ($variant) {
+                    $variant->update([
+                        'sku' => $variantData['sku'],
+                        'Name' => $variantData['Name'],
+                        'price' => $variantData['price'],
+                        'stock' => $variantData['stock'],
+                    ]);
+                }
+            }
+        }
+    }
 
     return response()->json([
         'message' => 'Cập nhật sản phẩm thành công!',
-        'data' => $product
+        'data' => $product->load('variants')
     ]);
 }
 
@@ -201,10 +227,12 @@ class ProductController extends Controller
         ]);
     }
 
-// Xem danh sách sản phẩm đã xóa (có nền trạng thái is_deleted = true)
+// Xem danh sách sản phẩm đã xóa
 public function trashed()
 {
-    $products = Product::onlyTrashed()->with('variants')->get();
+    $products = Product::onlyTrashed()
+        ->with(['variants', 'brand', 'category'])
+        ->get();
 
     return response()->json([
         'message' => 'Danh sách sản phẩm đã xóa',

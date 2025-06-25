@@ -57,10 +57,6 @@ class AuthController extends Controller
             ]);
         }
 
-        // Danh sách admin
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        $isAdmin = in_array($user->email, $adminEmails);
-
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -69,7 +65,7 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $isAdmin ? 'admin' : 'client',
+                'role' => $user->role ?? 'client',
             ],
             'token' => $token,
             'token_type' => 'Bearer'
@@ -88,15 +84,13 @@ class AuthController extends Controller
     public function user(Request $request)
     {
         $user = $request->user();
-        $adminEmails = ['admin@test.com', 'admin@admin.com'];
-        $isAdmin = in_array($user->email, $adminEmails);
 
         return response()->json([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $isAdmin ? 'admin' : 'client',
+                'role' => $user->role ?? 'client',
             ]
         ]);
     }
