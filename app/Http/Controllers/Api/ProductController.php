@@ -15,9 +15,17 @@ class ProductController extends Controller
     // Lấy danh sách tất cả sản phẩm cùng biến thể
    public function index()
 {
-    $products = Product::with(['variants', 'brand', 'category'])
-        ->where('is_active', true)
-        ->get();
+    // Nếu là admin thì trả về tất cả (bao gồm đã xóa)
+    if (auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'super_admin')) {
+        $products = Product::withTrashed()
+            ->with(['variants', 'brand', 'category'])
+            ->get();
+    } else {
+        // Client chỉ thấy sản phẩm chưa bị xóa và đang hoạt động
+        $products = Product::with(['variants', 'brand', 'category'])
+            ->where('is_active', true)
+            ->get();
+    }
 
     return response()->json([
         'message' => 'Danh sách sản phẩm',
@@ -238,6 +246,20 @@ public function trashed()
         'message' => 'Danh sách sản phẩm đã xóa',
         'data' => $products
     ]);
+}
+
+// Xóa vĩnh viễn sản phẩm
+public function forceDelete($id)
+{
+    $product = Product::onlyTrashed()->find($id);
+
+    if (!$product) {
+        return response()->json(['message' => 'Không tìm thấy sản phẩm đã xóa'], 404);
+    }
+
+    $product->forceDelete();
+
+    return response()->json(['message' => 'Xóa vĩnh viễn sản phẩm thành công']);
 }
 
 }

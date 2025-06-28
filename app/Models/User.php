@@ -15,6 +15,12 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
+        'address',
+        'birth_date',
+        'gender',
+        'role',
+        'status'
     ];
 
     protected $hidden = [
@@ -27,5 +33,19 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    // Relationships
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function cartItems()
+    {
+        return $this->hasMany(CartItem::class);
+    }
 }

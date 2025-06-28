@@ -16,13 +16,22 @@ class CartController extends Controller
     public function index(Request $request)
     {
         $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
-        $items = $cart->items()->with(['product', 'productVariant.attributeValues'])->get();
+        $items = $cart->items()->with(['product', 'productVariant'])->get();
+        
+        // Transform items to include stock info
+        $transformedItems = $items->map(function ($item) {
+            $itemArray = $item->toArray();
+            if ($item->productVariant) {
+                $itemArray['product_variant']['stock'] = $item->productVariant->stock;
+            }
+            return $itemArray;
+        });
         
         return response()->json([
             'message' => 'Danh sách giỏ hàng',
             'data' => [
                 'cart' => $cart,
-                'items' => $items,
+                'items' => $transformedItems,
                 'total' => $items->sum(fn($item) => $item->quantity * $item->price)
             ]
         ]);

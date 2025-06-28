@@ -19,7 +19,10 @@ use App\Http\Controllers\Api\{
     UploadController,
     UserController,
     DashboardController,
-    NotificationController
+    NotificationController,
+    CommentController,
+    VoucherController,
+    WishlistController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
@@ -45,6 +48,14 @@ Route::get('/attribute-values', [AttributeValueController::class, 'index']);
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{id}', [NewsController::class, 'show']);
 
+// Comments - public routes
+Route::get('/comments', [CommentController::class, 'index']);
+Route::get('/products/{id}/rating-stats', [CommentController::class, 'getProductRatingStats']);
+
+// Voucher validation - public
+Route::post('/vouchers/validate', [VoucherController::class, 'validateVoucher']);
+Route::get('/vouchers/available', [VoucherController::class, 'getAvailableVouchers']);
+
 // ✅ Client Routes (Yêu cầu đăng nhập)
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
@@ -56,6 +67,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cart/{id}', [CartController::class, 'update']);
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
+    // Cập nhật thông tin cá nhân
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/change-password', [AuthController::class, 'changePassword']);
+
     // Yêu cầu hoàn hàng và hoàn tiền
     Route::apiResource('return_requests', ReturnRequestController::class);
     Route::apiResource('refunds', RefundController::class);
@@ -66,10 +81,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
 
+    // Comments
+    Route::post('/comments', [CommentController::class, 'store']);
+
+    // Wishlist
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+    Route::post('/wishlist/check', [WishlistController::class, 'check']);
+    Route::delete('/wishlist/{id}', [WishlistController::class, 'destroy']);
+
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
+    Route::post('/orders', [OrderController::class, 'createOrder']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
+    Route::put('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
 });
 
 // ✅ Admin Routes
@@ -88,6 +114,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
     Route::get('/products/trashed', [ProductController::class, 'trashed']);
     Route::put('/products/restore/{id}', [ProductController::class, 'restore']);
+    Route::delete('/products/force-delete/{id}', [ProductController::class, 'forceDelete']);
     Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
 
     // Biến thể sản phẩm
@@ -130,6 +157,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/admin/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/admin/orders/{id}/status', [OrderController::class, 'updateStatus']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']); // Backup route
+    Route::put('/admin/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']); // Chỉ cập nhật trạng thái đơn hàng
 
     // Quản lý yêu cầu hoàn hàng (Admin)
     Route::get('/admin/return-requests', [ReturnRequestController::class, 'index']);
@@ -144,6 +172,14 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Quản lý giỏ hàng (Admin)
     Route::get('/admin/carts', [CartController::class, 'adminIndex']);
     Route::get('/admin/carts/{userId}', [CartController::class, 'adminShow']);
+
+    // Quản lý bình luận (Admin)
+    Route::get('/admin/comments', [CommentController::class, 'adminIndex']);
+    Route::put('/admin/comments/{id}/status', [CommentController::class, 'updateStatus']);
+    Route::delete('/admin/comments/{id}', [CommentController::class, 'destroy']);
+
+    // Quản lý voucher (Admin)
+    Route::apiResource('vouchers', VoucherController::class);
 });
 
 

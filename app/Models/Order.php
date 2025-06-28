@@ -11,6 +11,14 @@ class Order extends Model
         'order_status_id',
         'payment_status_id',
         'total',
+        'name',
+        'phone',
+        'email',
+        'address',
+        'note',
+        'payment_method',
+        'coupon_code',
+        'coupon_discount',
         'created_at',
     ];
 
@@ -21,6 +29,11 @@ class Order extends Model
     const STATUS_DELIVERED = 4;
     const STATUS_COMPLETED = 5;
     const STATUS_CANCELLED = 6;
+    
+    // Payment status constants
+    const PAYMENT_PENDING = 1;
+    const PAYMENT_PAID = 2;
+    const PAYMENT_FAILED = 3;
 
     public function user()
     {
@@ -32,7 +45,48 @@ class Order extends Model
         return $this->hasMany(ReturnRequest::class);
     }
     public function items()
-{
-    return $this->hasMany(OrderItem::class);
-}
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+    
+    // Helper methods
+    public function isCompleted()
+    {
+        return $this->order_status_id == self::STATUS_COMPLETED;
+    }
+    
+    public function isPaid()
+    {
+        return $this->payment_status_id == self::PAYMENT_PAID;
+    }
+    
+    public function isCod()
+    {
+        return $this->payment_method === 'cod';
+    }
+    
+    public function getStatusTextAttribute()
+    {
+        $statuses = [
+            1 => 'Chờ xác nhận',
+            2 => 'Đã xác nhận', 
+            3 => 'Đang giao hàng',
+            4 => 'Đã giao hàng',
+            5 => 'Hoàn thành',
+            6 => 'Đã hủy'
+        ];
+        
+        return $statuses[$this->order_status_id] ?? 'Không xác định';
+    }
+    
+    public function getPaymentStatusTextAttribute()
+    {
+        $statuses = [
+            1 => 'Chưa thanh toán',
+            2 => 'Đã thanh toán',
+            3 => 'Thanh toán thất bại'
+        ];
+        
+        return $statuses[$this->payment_status_id] ?? 'Không xác định';
+    }
 }
