@@ -11,7 +11,9 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $categories = Category::withCount('products')
+        $categories = Category::withCount(['products' => function ($query) {
+            $query->where('is_active', true);
+        }])
             ->orderBy('name')
             ->get();
         
@@ -53,6 +55,9 @@ class CategoryController extends Controller
                 'message' => 'Không tìm thấy danh mục'
             ], 404);
         }
+        
+        // Đếm sản phẩm active
+        $category->products_count = $category->products()->where('is_active', true)->count();
 
         return response()->json([
             'message' => 'Chi tiết danh mục',
@@ -101,17 +106,39 @@ class CategoryController extends Controller
             ], 404);
         }
 
-        // Kiểm tra xem có sản phẩm nào đang sử dụng danh mục này không
-        if ($category->products()->count() > 0) {
+        // Không cho phép xóa danh mục "Không xác định"
+        if ($category->name === 'Không xác định') {
             return response()->json([
-                'message' => 'Không thể xóa danh mục đang được sử dụng'
+                'message' => 'Không thể xóa danh mục "Không xác định"'
             ], 400);
         }
 
-        $category->delete();
+        try {
+            \DB::beginTransaction();
+            
+            // Tạo hoặc lấy danh mục "Không xác định"
+            $uncategorized = Category::firstOrCreate(
+                ['name' => 'Không xác định'],
+                ['name' => 'Không xác định']
+            );
 
-        return response()->json([
-            'message' => 'Xóa danh mục thành công'
-        ]);
+            // Chuyển tất cả sản phẩm sang danh mục "Không xác định"
+            \DB::table('products')
+                ->where('category_id', $id)
+                ->update(['category_id' => $uncategorized->id]);
+
+            $category->delete();
+            
+            \DB::commit();
+
+            return response()->json([
+                'message' => 'Xóa danh mục thành công. Các sản phẩm đã được chuyển sang "Không xác định"'
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollback();
+            return response()->json([
+                'message' => 'Lỗi khi xóa danh mục: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -11,7 +11,9 @@ class BrandController extends Controller
 {
     public function index()
     {
-        $brands = Brand::withCount('products')
+        $brands = Brand::withCount(['products' => function ($query) {
+            $query->where('is_active', true);
+        }])
             ->orderBy('name')
             ->get();
         
@@ -53,6 +55,9 @@ class BrandController extends Controller
                 'message' => 'Không tìm thấy thương hiệu'
             ], 404);
         }
+        
+        // Đếm sản phẩm active
+        $brand->products_count = $brand->products()->where('is_active', true)->count();
 
         return response()->json([
             'message' => 'Chi tiết thương hiệu',
@@ -101,17 +106,39 @@ class BrandController extends Controller
             ], 404);
         }
 
-        // Kiểm tra xem có sản phẩm nào đang sử dụng thương hiệu này không
-        if ($brand->products()->count() > 0) {
+        // Không cho phép xóa thương hiệu "Không xác định"
+        if ($brand->name === 'Không xác định') {
             return response()->json([
-                'message' => 'Không thể xóa thương hiệu đang được sử dụng'
+                'message' => 'Không thể xóa thương hiệu "Không xác định"'
             ], 400);
         }
 
-        $brand->delete();
+        try {
+            \DB::beginTransaction();
+            
+            // Tạo hoặc lấy thương hiệu "Không xác định"
+            $unbranded = Brand::firstOrCreate(
+                ['name' => 'Không xác định'],
+                ['name' => 'Không xác định']
+            );
 
-        return response()->json([
-            'message' => 'Xóa thương hiệu thành công'
-        ]);
+            // Chuyển tất cả sản phẩm sang thương hiệu "Không xác định"
+            \DB::table('products')
+                ->where('brand_id', $id)
+                ->update(['brand_id' => $unbranded->id]);
+
+            $brand->delete();
+            
+            \DB::commit();
+
+            return response()->json([
+                'message' => 'Xóa thương hiệu thành công. Các sản phẩm đã được chuyển sang "Không xác định"'
+            ]);
+        } catch (\Exception $e) {
+            \DB::rollback();
+            return response()->json([
+                'message' => 'Lỗi khi xóa thương hiệu: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

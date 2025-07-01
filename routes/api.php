@@ -28,10 +28,8 @@ use App\Http\Controllers\Api\{
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
-Route::middleware('cors')->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
-});
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
 
 // Upload route (cần đăng nhập)
 Route::middleware('auth:sanctum')->post('/upload', [UploadController::class, 'uploadImage']);
@@ -41,7 +39,11 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 
 Route::get('/brands', [BrandController::class, 'index']);
+Route::get('/brands/{id}', [BrandController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/{id}', [CategoryController::class, 'show']);
+Route::get('/products-by-brand/{id}', [ProductController::class, 'getByBrand']);
+Route::get('/products-by-category/{id}', [ProductController::class, 'getByCategory']);
 
 // Attributes - public routes
 Route::get('/attributes', [AttributeController::class, 'index']);
@@ -133,6 +135,11 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // ✅ Admin Routes  
+// Test endpoint
+Route::get('/test', function () {
+    return response()->json(['message' => 'API working', 'time' => now()]);
+});
+
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     // Quản lý tài khoản người dùng
     Route::get('/users', function () {
@@ -140,6 +147,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     });
 
     // Quản lý sản phẩm
+    Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
@@ -155,10 +163,12 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
 
     // Thương hiệu, danh mục - CRUD operations
+    Route::get('/brands/{id}', [BrandController::class, 'show']);
     Route::post('/brands', [BrandController::class, 'store']);
     Route::put('/brands/{id}', [BrandController::class, 'update']);
     Route::delete('/brands/{id}', [BrandController::class, 'destroy']);
     
+    Route::get('/categories/{id}', [CategoryController::class, 'show']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::put('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
@@ -177,6 +187,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
 
     // Dashboard stats
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+    Route::get('/stats', [DashboardController::class, 'getStats']); // Alias
 
     // Quản lý người dùng (Admin)
     Route::apiResource('users', UserController::class);

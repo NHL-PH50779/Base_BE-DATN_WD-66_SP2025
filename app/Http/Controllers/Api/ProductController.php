@@ -13,19 +13,43 @@ use Illuminate\Support\Facades\Validator;
 class ProductController extends Controller
 {
     // Lấy danh sách tất cả sản phẩm cùng biến thể
-   public function index()
+   public function index(Request $request)
 {
-    // Nếu là admin thì trả về tất cả (bao gồm đã xóa)
-    if (auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'super_admin')) {
-        $products = Product::withTrashed()
-            ->with(['variants', 'brand', 'category'])
-            ->get();
-    } else {
-        // Client chỉ thấy sản phẩm chưa bị xóa và đang hoạt động
-        $products = Product::with(['variants', 'brand', 'category'])
-            ->where('is_active', true)
-            ->get();
+    $query = Product::with(['variants', 'brand', 'category']);
+    
+    // Filter theo brand_id nếu có
+    if ($request->has('brand_id') && $request->brand_id) {
+        $query->where('brand_id', $request->brand_id);
     }
+    
+    // Filter theo category_id nếu có
+    if ($request->has('category_id') && $request->category_id) {
+        $query->where('category_id', $request->category_id);
+    }
+    
+    // Logic hiển thị sản phẩm
+    if ($request->has('brand_id') || $request->has('category_id')) {
+        // Cho trang chi tiết: chỉ hiển thị sản phẩm active và chưa xóa
+        $query->where('is_active', true);
+    } else {
+        // Cho trang quản lý admin: hiển thị tất cả
+        if (auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'super_admin')) {
+            $query->withTrashed();
+        } else {
+            $query->where('is_active', true);
+        }
+    }
+    
+    $products = $query->get();
+    
+    // Thêm giá từ variant đầu tiên
+    $products->each(function ($product) {
+        if ($product->variants && $product->variants->count() > 0) {
+            $product->price = $product->variants->first()->price;
+        } else {
+            $product->price = 0;
+        }
+    });
 
     return response()->json([
         'message' => 'Danh sách sản phẩm',
@@ -260,6 +284,48 @@ public function forceDelete($id)
     $product->forceDelete();
 
     return response()->json(['message' => 'Xóa vĩnh viễn sản phẩm thành công']);
+}
+
+public function getByBrand($brandId)
+{
+    $products = Product::with(['brand', 'category', 'variants'])
+        ->where('brand_id', $brandId)
+        ->where('is_active', true)
+        ->get();
+        
+    $products->each(function ($product) {
+        if ($product->variants && $product->variants->count() > 0) {
+            $product->price = $product->variants->first()->price;
+        } else {
+            $product->price = 0;
+        }
+    });
+
+    return response()->json([
+        'message' => 'Sản phẩm theo thương hiệu',
+        'data' => $products
+    ]);
+}
+
+public function getByCategory($categoryId)
+{
+    $products = Product::with(['brand', 'category', 'variants'])
+        ->where('category_id', $categoryId)
+        ->where('is_active', true)
+        ->get();
+        
+    $products->each(function ($product) {
+        if ($product->variants && $product->variants->count() > 0) {
+            $product->price = $product->variants->first()->price;
+        } else {
+            $product->price = 0;
+        }
+    });
+
+    return response()->json([
+        'message' => 'Sản phẩm theo danh mục',
+        'data' => $products
+    ]);
 }
 
 }
