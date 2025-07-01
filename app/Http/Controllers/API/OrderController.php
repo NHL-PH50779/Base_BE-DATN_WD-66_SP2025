@@ -332,9 +332,9 @@ public function cancelOrder(Request $request, $id)
         ], 404);
     }
     
-    if (!in_array($order->order_status_id, [1, 2])) {
+    if ($order->order_status_id !== 1) {
         return response()->json([
-            'message' => 'Không thể hủy đơn hàng ở trạng thái này'
+            'message' => 'Chỉ có thể hủy đơn hàng khi chưa được xác nhận'
         ], 400);
     }
     
@@ -392,6 +392,146 @@ public function updateOrderStatus(Request $request, $id)
     return response()->json([
         'message' => 'Cập nhật trạng thái đơn hàng thành công',
         'data' => $order->load(['user', 'items.product'])
+    ]);
+}
+
+// Tự động hoàn thành đơn hàng sau 3 ngày
+public function autoComplete()
+{
+    $user = auth('sanctum')->user();
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+
+    $threeDaysAgo = now()->subDays(3);
+    $orders = Order::where('order_status_id', Order::STATUS_DELIVERED)
+        ->where('updated_at', '<=', $threeDaysAgo)
+        ->get();
+
+    $completedCount = 0;
+    foreach($orders as $order) {
+        $updateData = ['order_status_id' => Order::STATUS_COMPLETED];
+        
+        // Tự động cập nhật trạng thái thanh toán cho COD
+        if($order->payment_method === 'cod' && $order->payment_status_id == Order::PAYMENT_PENDING) {
+            $updateData['payment_status_id'] = Order::PAYMENT_PAID;
+        }
+        
+        $order->update($updateData);
+        $completedCount++;
+    }
+
+    return response()->json([
+        'message' => "Đã tự động hoàn thành {$completedCount} đơn hàng",
+        'completed_orders' => $completedCount
+    ]);
+}
+
+// Client xác nhận hoàn thành đơn hàng
+public function confirmComplete(Request $request, $id)
+{
+    $user = $request->user();
+    $order = Order::where('id', $id)->where('user_id', $user->id)->first();
+    
+    if (!$order) {
+        return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
+    }
+    
+    if ($order->order_status_id !== Order::STATUS_DELIVERED) {
+        return response()->json(['message' => 'Chỉ có thể xác nhận đơn hàng đã giao'], 400);
+    }
+    
+    $updateData = ['order_status_id' => Order::STATUS_COMPLETED];
+    
+    // Tự động cập nhật trạng thái thanh toán cho COD
+    if($order->payment_method === 'cod' && $order->payment_status_id == Order::PAYMENT_PENDING) {
+        $updateData['payment_status_id'] = Order::PAYMENT_PAID;
+    }
+    
+    $order->update($updateData);
+    
+    return response()->json([
+        'message' => 'Xác nhận nhận hàng thành công',
+        'data' => $order->load(['items.product'])
+    ]);
+}
+
+// Yêu cầu hoàn hàng
+public function requestRefund(Request $request, $id)
+{
+    $user = $request->user();
+    $order = Order::where('id', $id)->where('user_id', $user->id)->first();
+    
+    if (!$order) {
+        return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
+    }
+    
+    if (!in_array($order->order_status_id, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])) {
+        return response()->json(['message' => 'Chỉ có thể yêu cầu hoàn hàng cho đơn đã giao hoặc hoàn thành'], 400);
+    }
+    
+    $validated = $request->validate([
+        'reason' => 'required|string|max:500'
+    ]);
+    
+    // Tạo yêu cầu hoàn hàng
+    ReturnRequest::create([
+        'order_id' => $order->id,
+        'user_id' => $user->id,
+        'reason' => $validated['reason'],
+        'status' => 'pending'
+    ]);
+    
+    // Cập nhật trạng thái đơn hàng
+    $order->update(['order_status_id' => 7]); // Yêu cầu hoàn hàng
+    
+    return response()->json([
+        'message' => 'Đã gửi yêu cầu hoàn hàng thành công',
+        'data' => $order
+    ]);
+}
+
+// Admin xử lý yêu cầu hoàn hàng
+public function processRefund(Request $request, $id)
+{
+    $user = auth('sanctum')->user();
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+
+    $order = Order::findOrFail($id);
+    
+    if ($order->order_status_id !== 7) {
+        return response()->json(['message' => 'Đơn hàng không ở trạng thái yêu cầu hoàn hàng'], 400);
+    }
+    
+    $validated = $request->validate([
+        'approve' => 'required|boolean',
+        'admin_note' => 'nullable|string|max:500'
+    ]);
+    
+    $newStatusId = $validated['approve'] ? 8 : 9; // 8: Đồng ý, 9: Từ chối
+    $updateData = ['order_status_id' => $newStatusId];
+    
+    // Nếu đồng ý hoàn hàng, cập nhật trạng thái thanh toán
+    if ($validated['approve']) {
+        $updateData['payment_status_id'] = 3; // Đã hoàn tiền
+    }
+    
+    $order->update($updateData);
+    
+    // Cập nhật return request
+    $returnRequest = ReturnRequest::where('order_id', $order->id)->latest()->first();
+    if ($returnRequest) {
+        $returnRequest->update([
+            'status' => $validated['approve'] ? 'approved' : 'rejected',
+            'admin_note' => $validated['admin_note']
+        ]);
+    }
+    
+    return response()->json([
+        'message' => $validated['approve'] ? 'Đã đồng ý hoàn hàng' : 'Đã từ chối hoàn hàng',
+        'data' => $order->load(['returnRequests'])
     ]);
 }
 

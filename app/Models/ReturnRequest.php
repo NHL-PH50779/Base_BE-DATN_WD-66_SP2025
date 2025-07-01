@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ReturnRequest extends Model
 {
     
-    protected $fillable = ['user_id', 'order_id', 'reason', 'status'];
+    protected $fillable = ['user_id', 'order_id', 'reason', 'status', 'admin_note'];
     public $timestamps = true;
     public function user()
     {

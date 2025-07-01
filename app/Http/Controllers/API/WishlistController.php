@@ -5,17 +5,27 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Wishlist;
 use App\Models\Product;
+use App\Services\WishlistCacheService;
+use App\Services\AnalyticsService;
+use App\Http\Requests\WishlistRequest;
 use Illuminate\Http\Request;
 
 class WishlistController extends Controller
 {
+    protected $cacheService;
+    protected $analyticsService;
+
+    public function __construct(
+        WishlistCacheService $cacheService,
+        AnalyticsService $analyticsService
+    ) {
+        $this->cacheService = $cacheService;
+        $this->analyticsService = $analyticsService;
+    }
     // Lấy danh sách sản phẩm yêu thích của user
     public function index()
     {
-        $wishlists = Wishlist::with(['product.brand', 'product.category'])
-            ->where('user_id', auth()->id())
-            ->latest()
-            ->get();
+        $wishlists = $this->cacheService->getUserWishlist(auth()->id());
 
         return response()->json([
             'message' => 'Danh sách sản phẩm yêu thích',
@@ -24,7 +34,7 @@ class WishlistController extends Controller
     }
 
     // Thêm/xóa sản phẩm khỏi wishlist (toggle)
-    public function toggle(Request $request)
+    public function toggle(WishlistRequest $request)
     {
         $request->validate([
             'product_id' => 'required|exists:products,id'
@@ -40,6 +50,8 @@ class WishlistController extends Controller
         if ($wishlist) {
             // Nếu đã tồn tại thì xóa
             $wishlist->delete();
+            $this->cacheService->invalidateUserWishlist($userId);
+            $this->analyticsService->trackWishlistAction($userId, $productId, 'remove');
             return response()->json([
                 'message' => 'Đã xóa khỏi danh sách yêu thích',
                 'is_favorited' => false
@@ -50,6 +62,8 @@ class WishlistController extends Controller
                 'user_id' => $userId,
                 'product_id' => $productId
             ]);
+            $this->cacheService->invalidateUserWishlist($userId);
+            $this->analyticsService->trackWishlistAction($userId, $productId, 'add');
             return response()->json([
                 'message' => 'Đã thêm vào danh sách yêu thích',
                 'is_favorited' => true

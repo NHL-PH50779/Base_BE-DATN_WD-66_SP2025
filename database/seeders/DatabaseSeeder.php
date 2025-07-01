@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         ProductSeeder::class,
             NewsSeeder::class,
             VoucherSeeder::class,
+            FlashSaleSeeder::class,
         ]);
         // User::factory(10)->create();
 

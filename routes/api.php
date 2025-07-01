@@ -22,7 +22,9 @@ use App\Http\Controllers\Api\{
     NotificationController,
     CommentController,
     VoucherController,
-    WishlistController
+    WishlistController,
+    FlashSaleController,
+    FlashSalePurchaseController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
@@ -90,21 +92,50 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/wishlist/check', [WishlistController::class, 'check']);
     Route::delete('/wishlist/{id}', [WishlistController::class, 'destroy']);
 
+    // Flash Sale
+    Route::prefix('flash-sale')->group(function () {
+        Route::get('/current', [FlashSaleController::class, 'current']);
+        Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
+        Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
+        Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
+        
+        // Flash Sale Purchase
+        Route::post('/purchase', [FlashSalePurchaseController::class, 'purchase']);
+        Route::post('/validate-price', [FlashSalePurchaseController::class, 'validateFlashPrice']);
+    });
+
+    // Flash Sale Management
+    Route::prefix('flash-sales')->group(function () {
+        Route::get('/', [FlashSaleController::class, 'adminIndex']);
+        Route::post('/', [FlashSaleController::class, 'adminStore']);
+        Route::get('/{id}', [FlashSaleController::class, 'show']);
+        Route::put('/{id}', [FlashSaleController::class, 'adminUpdate']);
+        Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
+    });
+
+    // News
+    Route::prefix('news')->group(function () {
+        Route::get('/', [NewsController::class, 'index']);
+        Route::get('/latest', [NewsController::class, 'latest']);
+        Route::get('/{id}', [NewsController::class, 'show']);
+    });
+
+
+
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
     Route::post('/orders', [OrderController::class, 'createOrder']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::put('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
+    Route::put('/orders/{id}/complete', [OrderController::class, 'confirmComplete']);
+    Route::post('/orders/{id}/refund-request', [OrderController::class, 'requestRefund']);
 });
 
-// ✅ Admin Routes
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+// ✅ Admin Routes  
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     // Quản lý tài khoản người dùng
     Route::get('/users', function () {
-        return response()->json(['users' => \App\Models\User::all()]);
-    });
-    Route::get('/admin/users', function () {
         return response()->json(['users' => \App\Models\User::all()]);
     });
 
@@ -148,38 +179,43 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 
     // Quản lý người dùng (Admin)
-    Route::apiResource('admin/users', UserController::class);
-    Route::get('/users', [UserController::class, 'index']); // Backup route
+    Route::apiResource('users', UserController::class);
 
     // Quản lý đơn hàng (Admin)
-    Route::get('/admin/orders', [OrderController::class, 'index']);
-    Route::get('/orders', [OrderController::class, 'index']); // Backup route
-    Route::get('/admin/orders/{id}', [OrderController::class, 'adminShow']);
-    Route::put('/admin/orders/{id}/status', [OrderController::class, 'updateStatus']);
-    Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']); // Backup route
-    Route::put('/admin/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']); // Chỉ cập nhật trạng thái đơn hàng
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/{id}', [OrderController::class, 'adminShow']);
+    Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+    Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
+    Route::post('/orders/auto-complete', [OrderController::class, 'autoComplete']);
+    Route::put('/orders/{id}/process-refund', [OrderController::class, 'processRefund']);
 
     // Quản lý yêu cầu hoàn hàng (Admin)
-    Route::get('/admin/return-requests', [ReturnRequestController::class, 'index']);
-    Route::put('/admin/return-requests/{id}', [ReturnRequestController::class, 'update']);
+    Route::get('/return-requests', [ReturnRequestController::class, 'index']);
+    Route::put('/return-requests/{id}', [ReturnRequestController::class, 'update']);
 
     // Thông báo admin
-    Route::get('/admin/notifications', [NotificationController::class, 'index']);
-    Route::put('/admin/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::put('/admin/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::get('/admin/notifications/unread-count', [NotificationController::class, 'getUnreadCount']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'getUnreadCount']);
 
     // Quản lý giỏ hàng (Admin)
-    Route::get('/admin/carts', [CartController::class, 'adminIndex']);
-    Route::get('/admin/carts/{userId}', [CartController::class, 'adminShow']);
+    Route::get('/carts', [CartController::class, 'adminIndex']);
+    Route::get('/carts/{userId}', [CartController::class, 'adminShow']);
 
     // Quản lý bình luận (Admin)
-    Route::get('/admin/comments', [CommentController::class, 'adminIndex']);
-    Route::put('/admin/comments/{id}/status', [CommentController::class, 'updateStatus']);
-    Route::delete('/admin/comments/{id}', [CommentController::class, 'destroy']);
+    Route::get('/comments', [CommentController::class, 'adminIndex']);
+    Route::put('/comments/{id}/status', [CommentController::class, 'updateStatus']);
+    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
     // Quản lý voucher (Admin)
     Route::apiResource('vouchers', VoucherController::class);
+    
+    // Quản lý tin tức (Admin)
+    Route::get('/news', [NewsController::class, 'adminIndex']);
+    Route::post('/news', [NewsController::class, 'store']);
+    Route::put('/news/{id}', [NewsController::class, 'update']);
+    Route::delete('/news/{id}', [NewsController::class, 'destroy']);
 });
 
 

@@ -96,6 +96,9 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'province' => $user->province,
+                'district' => $user->district,
+                'ward' => $user->ward,
                 'address' => $user->address,
                 'birth_date' => $user->birth_date,
                 'gender' => $user->gender,
@@ -111,6 +114,9 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:15',
+            'province' => 'nullable|string|max:255',
+            'district' => 'nullable|string|max:255',
+            'ward' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:500',
             'birth_date' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other'
@@ -119,6 +125,9 @@ class AuthController extends Controller
         $user->update([
             'name' => $request->name,
             'phone' => $request->phone,
+            'province' => $request->province,
+            'district' => $request->district,
+            'ward' => $request->ward,
             'address' => $request->address,
             'birth_date' => $request->birth_date,
             'gender' => $request->gender
@@ -131,6 +140,9 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'province' => $user->province,
+                'district' => $user->district,
+                'ward' => $user->ward,
                 'address' => $user->address,
                 'birth_date' => $user->birth_date,
                 'gender' => $user->gender,
