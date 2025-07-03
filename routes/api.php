@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{
+    WithdrawRequestController,
     AuthController,
     ProductController,
     ProductVariantController,
@@ -58,6 +59,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Yêu cầu hoàn hàng và hoàn tiền
     Route::apiResource('return_requests', ReturnRequestController::class);
     Route::apiResource('refunds', RefundController::class);
+    // Route cho admin duyệt yêu cầu hoàn hàng
+    Route::post('return_requests/{id}/approve', [ReturnRequestController::class, 'approve']);
+    Route::post('refunds/{id}/approve', [RefundController::class, 'approve']);
+    Route::post('return_requests/{id}/reject', [ReturnRequestController::class, 'reject']);
+    
+    Route::apiResource('withdraw_requests', WithdrawRequestController::class);
+    Route::post('withdraw_requests/{id}/approve', [WithdrawRequestController::class, 'approve']);
+    Route::post('withdraw_requests/{id}/reject', [WithdrawRequestController::class, 'reject']);
 
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
