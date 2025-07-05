@@ -20,12 +20,19 @@ use App\Http\Controllers\Api\{
     UserController,
     DashboardController
 };
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
 
 // ✅ Public Routes (Không cần đăng nhập)
-Route::middleware('cors')->group(function () {
+
     Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
     Route::post('/login', [AuthController::class, 'login']);
-});
+    Route::post('/forgot-password/request-otp', [AuthController::class, 'requestResetOtp']);
+    Route::post('/forgot-password/verify-otp', [AuthController::class, 'verifyResetOtp']);
+    Route::post('/forgot-password/reset', [AuthController::class, 'resetPassword']);
+
+
+
 
 // Upload route (cần đăng nhập)
 Route::middleware('auth:sanctum')->post('/upload', [UploadController::class, 'uploadImage']);
@@ -93,7 +100,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::post('/brands', [BrandController::class, 'store']);
     Route::put('/brands/{id}', [BrandController::class, 'update']);
     Route::delete('/brands/{id}', [BrandController::class, 'destroy']);
-    
+
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::put('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
