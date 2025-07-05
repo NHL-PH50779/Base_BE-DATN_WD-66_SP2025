@@ -11,11 +11,13 @@ class BrandController extends Controller
 {
     public function index()
     {
-        $brands = Brand::withCount(['products' => function ($query) {
-            $query->where('is_active', true);
-        }])
-            ->orderBy('name')
-            ->get();
+        $brands = cache()->remember('brands_list', 300, function () {
+            return Brand::withCount(['products' => function ($query) {
+                $query->where('is_active', true);
+            }])
+                ->orderBy('name')
+                ->get();
+        });
         
         return response()->json([
             'message' => 'Danh sách thương hiệu',

@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
 
+        // Sanctum middleware - tạm thời comment để tránh lỗi
+        // $middleware->api(prepend: [
+        //     \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        // ]);
+
         // Tắt CSRF cho API routes
         $middleware->validateCsrfTokens(except: [
             'api/*'

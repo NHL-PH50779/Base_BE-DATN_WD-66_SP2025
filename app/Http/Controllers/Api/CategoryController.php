@@ -11,11 +11,13 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $categories = Category::withCount(['products' => function ($query) {
-            $query->where('is_active', true);
-        }])
-            ->orderBy('name')
-            ->get();
+        $categories = cache()->remember('categories_list', 300, function () {
+            return Category::withCount(['products' => function ($query) {
+                $query->where('is_active', true);
+            }])
+                ->orderBy('name')
+                ->get();
+        });
         
         return response()->json([
             'message' => 'Danh sách danh mục',

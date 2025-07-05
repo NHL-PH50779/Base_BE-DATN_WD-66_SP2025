@@ -10,6 +10,8 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\OrderItem;
+use App\Models\ReturnRequest;
+use App\Models\Wallet;
 class OrderController extends Controller
 {
     public function checkout(Request $request)
@@ -87,7 +89,7 @@ try {
             'email' => 'nullable|email|max:255',
             'address' => 'required|string',
             'note' => 'nullable|string',
-            'payment_method' => 'required|in:cod,bank_transfer,credit_card',
+            'payment_method' => 'required|in:cod,bank_transfer,credit_card,vnpay',
             'total' => 'required|numeric|min:0',
             'coupon_code' => 'nullable|string',
             'coupon_discount' => 'nullable|numeric|min:0',
@@ -102,24 +104,32 @@ try {
         }
 
         $user = $request->user();
-        $cart = Cart::where('user_id', $user->id)->first();
-        if (!$cart || $cart->items->isEmpty()) {
-            return response()->json([
-                'message' => 'Giỏ hàng trống'
-            ], 400);
+        
+        // Kiểm tra items từ request hoặc giỏ hàng
+        if ($request->has('items') && !empty($request->items)) {
+            // Sử dụng items từ request
+            $orderItems = $request->items;
+        } else {
+            // Lấy từ giỏ hàng
+            $cart = Cart::with('items.product')->where('user_id', $user->id)->first();
+            if (!$cart || $cart->items->isEmpty()) {
+                return response()->json([
+                    'message' => 'Giỏ hàng trống và không có sản phẩm nào được chọn'
+                ], 400);
+            }
+            $orderItems = $cart->items;
         }
 
-        // Kiểm tra tồn kho trước khi đặt hàng
-        $cartItems = $request->items ? 
-            $cart->items->whereIn('id', collect($request->items)->pluck('id')) : 
-            $cart->items;
+        // Kiểm tra tồn kho
+        foreach ($orderItems as $item) {
+            $productVariantId = is_array($item) ? ($item['product_variant_id'] ?? null) : $item->product_variant_id;
+            $quantity = is_array($item) ? $item['quantity'] : $item->quantity;
             
-        foreach ($cartItems as $cartItem) {
-            if ($cartItem->product_variant_id) {
-                $variant = ProductVariant::find($cartItem->product_variant_id);
-                if (!$variant || $variant->stock < $cartItem->quantity) {
+            if ($productVariantId) {
+                $variant = ProductVariant::find($productVariantId);
+                if (!$variant || $variant->stock < $quantity) {
                     return response()->json([
-                        'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho"
+                        'message' => "Sản phẩm không đủ số lượng tồn kho"
                     ], 400);
                 }
             }
@@ -144,28 +154,31 @@ try {
             ]);
 
             // Tạo order items và trừ tồn kho
-            foreach ($cartItems as $cartItem) {
+            foreach ($orderItems as $item) {
+                $productId = is_array($item) ? $item['product_id'] : $item->product_id;
+                $productVariantId = is_array($item) ? ($item['product_variant_id'] ?? null) : $item->product_variant_id;
+                $quantity = is_array($item) ? $item['quantity'] : $item->quantity;
+                $price = is_array($item) ? $item['price'] : $item->price;
+                
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'product_variant_id' => $cartItem->product_variant_id,
-                    'quantity' => $cartItem->quantity,
-                    'price' => $cartItem->price
+                    'product_id' => $productId,
+                    'product_variant_id' => $productVariantId,
+                    'quantity' => $quantity,
+                    'price' => $price
                 ]);
                 
                 // Trừ tồn kho
-                if ($cartItem->product_variant_id) {
-                    $variant = ProductVariant::find($cartItem->product_variant_id);
+                if ($productVariantId) {
+                    $variant = ProductVariant::find($productVariantId);
                     if ($variant) {
-                        $variant->decrement('stock', $cartItem->quantity);
+                        $variant->decrement('stock', $quantity);
                     }
                 }
             }
 
-            // Xóa các items đã đặt hàng khỏi giỏ hàng
-            if ($request->items) {
-                $cart->items()->whereIn('id', collect($request->items)->pluck('id'))->delete();
-            } else {
+            // Xóa giỏ hàng nếu có
+            if (isset($cart)) {
                 $cart->items()->delete();
             }
 
@@ -173,7 +186,9 @@ try {
             
             return response()->json([
                 'message' => 'Đặt hàng thành công',
-                'data' => $order->load(['items.product', 'items.productVariant'])
+                'data' => [
+                    'order' => $order->load(['items.product', 'items.productVariant'])
+                ]
             ], 201);
             
         } catch (\Exception $e) {
@@ -262,7 +277,7 @@ public function updateStatus(Request $request, $id)
     ]);
 
     // Tự động cập nhật trạng thái thanh toán khi đơn hàng hoàn thành
-    if ($validated['order_status_id'] == Order::STATUS_COMPLETED) {
+    if ($validated['order_status_id'] == Order::STATUS_DELIVERED) {
         // Nếu phương thức thanh toán là COD, tự động đánh dấu đã thanh toán
         if ($order->payment_method === 'cod') {
             $validated['payment_status_id'] = 2; // Đã thanh toán
@@ -332,16 +347,36 @@ public function cancelOrder(Request $request, $id)
         ], 404);
     }
     
-    if ($order->order_status_id !== 1) {
+    // Cho phép hủy khi: Chờ xác nhận (1) hoặc Đã xác nhận (2)
+    if (!in_array($order->order_status_id, [1, 2])) {
         return response()->json([
-            'message' => 'Chỉ có thể hủy đơn hàng khi chưa được xác nhận'
+            'message' => 'Chỉ có thể hủy đơn hàng khi chưa giao hoặc đang chuẩn bị'
         ], 400);
     }
     
     DB::beginTransaction();
     try {
-        $order->update(['order_status_id' => 6]);
+        // Cập nhật trạng thái đơn hàng thành đã hủy
+        $updateData = ['order_status_id' => 6];
         
+        // Nếu đơn hàng VNPay đã thanh toán, hoàn tiền về ví
+        if ($order->payment_method === 'vnpay' && $order->payment_status === 'paid') {
+            $updateData['payment_status_id'] = 3; // Đã hoàn tiền
+            $updateData['payment_status'] = 'refunded';
+            
+            // Hoàn tiền về ví người dùng
+            $wallet = $user->getOrCreateWallet();
+            $wallet->credit(
+                $order->total,
+                "Hoàn tiền đơn hàng #{$order->id}",
+                'Order',
+                $order->id
+            );
+        }
+        
+        $order->update($updateData);
+        
+        // Hoàn lại tồn kho
         foreach ($order->items as $item) {
             if ($item->product_variant_id) {
                 $variant = ProductVariant::find($item->product_variant_id);
@@ -353,9 +388,14 @@ public function cancelOrder(Request $request, $id)
         
         DB::commit();
         
+        $message = 'Hủy đơn hàng thành công';
+        if ($order->payment_method === 'vnpay' && $order->payment_status === 'refunded') {
+            $message .= '. Tiền đã được hoàn về ví của bạn.';
+        }
+        
         return response()->json([
-            'message' => 'Hủy đơn hàng thành công',
-            'data' => $order
+            'message' => $message,
+            'data' => $order->fresh()
         ]);
         
     } catch (\Exception $e) {
@@ -383,7 +423,7 @@ public function updateOrderStatus(Request $request, $id)
     $updateData = ['order_status_id' => $validated['order_status_id']];
     
     // Tự động cập nhật trạng thái thanh toán khi đơn hàng hoàn thành với COD
-    if ($validated['order_status_id'] == Order::STATUS_COMPLETED && $order->payment_method === 'cod') {
+    if ($validated['order_status_id'] == Order::STATUS_DELIVERED && $order->payment_method === 'cod') {
         $updateData['payment_status_id'] = Order::PAYMENT_PAID;
     }
 
@@ -410,7 +450,7 @@ public function autoComplete()
 
     $completedCount = 0;
     foreach($orders as $order) {
-        $updateData = ['order_status_id' => Order::STATUS_COMPLETED];
+        $updateData = ['order_status_id' => Order::STATUS_DELIVERED];
         
         // Tự động cập nhật trạng thái thanh toán cho COD
         if($order->payment_method === 'cod' && $order->payment_status_id == Order::PAYMENT_PENDING) {
@@ -437,22 +477,28 @@ public function confirmComplete(Request $request, $id)
         return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
     }
     
-    if ($order->order_status_id !== Order::STATUS_DELIVERED) {
-        return response()->json(['message' => 'Chỉ có thể xác nhận đơn hàng đã giao'], 400);
+    // Cho phép xác nhận khi đơn hàng đang giao (4) hoặc đã giao (5)
+    if (!in_array($order->order_status_id, [Order::STATUS_SHIPPING, Order::STATUS_DELIVERED])) {
+        return response()->json([
+            'message' => 'Chỉ có thể xác nhận đơn hàng khi đang giao hoặc đã giao. Trạng thái hiện tại: ' . $order->getStatusTextAttribute(),
+            'current_status' => $order->order_status_id
+        ], 400);
     }
     
-    $updateData = ['order_status_id' => Order::STATUS_COMPLETED];
+    // Cập nhật trạng thái đơn hàng thành đã giao và xử lý thanh toán
+    $updateData = ['order_status_id' => Order::STATUS_DELIVERED];
     
-    // Tự động cập nhật trạng thái thanh toán cho COD
+    // Tự động cập nhật trạng thái thanh toán cho COD khi xác nhận nhận hàng
     if($order->payment_method === 'cod' && $order->payment_status_id == Order::PAYMENT_PENDING) {
         $updateData['payment_status_id'] = Order::PAYMENT_PAID;
     }
     
+    // Cập nhật trạng thái
     $order->update($updateData);
     
     return response()->json([
         'message' => 'Xác nhận nhận hàng thành công',
-        'data' => $order->load(['items.product'])
+        'data' => $order->fresh()->load(['items.product'])
     ]);
 }
 
@@ -466,7 +512,7 @@ public function requestRefund(Request $request, $id)
         return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
     }
     
-    if (!in_array($order->order_status_id, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])) {
+    if (!in_array($order->order_status_id, [Order::STATUS_DELIVERED])) {
         return response()->json(['message' => 'Chỉ có thể yêu cầu hoàn hàng cho đơn đã giao hoặc hoàn thành'], 400);
     }
     
@@ -532,6 +578,51 @@ public function processRefund(Request $request, $id)
     return response()->json([
         'message' => $validated['approve'] ? 'Đã đồng ý hoàn hàng' : 'Đã từ chối hoàn hàng',
         'data' => $order->load(['returnRequests'])
+    ]);
+}
+
+public function updatePaymentStatus(Request $request, $id)
+{
+    $order = Order::find($id);
+    
+    if (!$order) {
+        return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
+    }
+    
+    $user = $request->user();
+    if ($order->user_id !== $user->id && !in_array($user->role, ['admin', 'super_admin'])) {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+    
+    $validated = $request->validate([
+        'payment_status' => 'required|in:paid,failed,refunded',
+        'order_status' => 'nullable|in:confirmed,cancelled'
+    ]);
+    
+    $updateData = [];
+    
+    if ($validated['payment_status'] === 'paid') {
+        $updateData['payment_status_id'] = 2;
+        $updateData['payment_status'] = 'paid';
+        $updateData['paid_at'] = now();
+        
+        if ($request->order_status === 'confirmed') {
+            $updateData['order_status_id'] = 2;
+        }
+    } elseif ($validated['payment_status'] === 'failed') {
+        $updateData['payment_status_id'] = 1;
+        $updateData['payment_status'] = 'failed';
+        
+        if ($request->order_status === 'cancelled') {
+            $updateData['order_status_id'] = 6;
+        }
+    }
+    
+    $order->update($updateData);
+    
+    return response()->json([
+        'message' => 'Cập nhật trạng thái thành công',
+        'data' => $order->fresh()
     ]);
 }
 

@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\{
     FlashSaleController,
     FlashSalePurchaseController
 };
+use App\Http\Controllers\VNPayController;
 
 // ✅ Public Routes (Không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
@@ -94,6 +95,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/wishlist/check', [WishlistController::class, 'check']);
     Route::delete('/wishlist/{id}', [WishlistController::class, 'destroy']);
 
+    // Wallet
+    Route::get('/wallet', [\App\Http\Controllers\Api\WalletController::class, 'getWallet']);
+    Route::get('/wallet/transactions', [\App\Http\Controllers\Api\WalletController::class, 'getTransactions']);
+
     // Flash Sale
     Route::prefix('flash-sale')->group(function () {
         Route::get('/current', [FlashSaleController::class, 'current']);
@@ -125,7 +130,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
-    Route::post('/orders/checkout', [OrderController::class, 'checkout']);
     Route::post('/orders', [OrderController::class, 'createOrder']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
@@ -228,6 +232,35 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::put('/news/{id}', [NewsController::class, 'update']);
     Route::delete('/news/{id}', [NewsController::class, 'destroy']);
 });
+
+
+
+// VNPay routes
+Route::post('/payment/vnpay', [\App\Http\Controllers\Api\VNPayController::class, 'createPayment']);
+Route::get('/payment/vnpay/return', [\App\Http\Controllers\Api\VNPayController::class, 'vnpayReturn']);
+Route::get('/vnpay/return', [\App\Http\Controllers\Api\VNPayController::class, 'vnpayReturn']);
+Route::post('/payment/vnpay/ipn', [\App\Http\Controllers\Api\VNPayController::class, 'vnpayIpn']);
+Route::get('/payment/vnpay/status/{orderId}', [\App\Http\Controllers\Api\VNPayController::class, 'checkPaymentStatus']);
+
+// Order status API
+Route::get('/orders/{id}/status', [\App\Http\Controllers\Api\OrderStatusController::class, 'show']);
+
+// Cancel request routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/cancel-requests', [\App\Http\Controllers\Api\CancelRequestController::class, 'store']);
+});
+
+// Admin cancel request routes
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::get('/cancel-requests', [\App\Http\Controllers\Api\CancelRequestController::class, 'adminIndex']);
+    Route::put('/cancel-requests/{id}', [\App\Http\Controllers\Api\CancelRequestController::class, 'adminUpdate']);
+});
+
+
+
+
+
+
 
 
 

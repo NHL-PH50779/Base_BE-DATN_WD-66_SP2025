@@ -20,20 +20,28 @@ class Order extends Model
         'coupon_code',
         'coupon_discount',
         'created_at',
+        'vnpay_txn_ref',
+        'vnpay_response_code',
+        'vnpay_transaction_no',
+        'payment_status',
+        'paid_at',
+        'total_amount',
+        'status',
+        'transaction_id'
     ];
 
     // Order status constants
-    const STATUS_PENDING = 1;
-    const STATUS_CONFIRMED = 2;
-    const STATUS_SHIPPING = 3;
-    const STATUS_DELIVERED = 4;
-    const STATUS_COMPLETED = 5;
-    const STATUS_CANCELLED = 6;
+    const STATUS_PENDING = 1;      // Chờ xác nhận
+    const STATUS_CONFIRMED = 2;    // Đã xác nhận (có thể hủy)
+    const STATUS_PREPARING = 3;    // Đang chuẩn bị
+    const STATUS_SHIPPING = 4;     // Đang giao
+    const STATUS_DELIVERED = 5;    // Đã giao
+    const STATUS_CANCELLED = 6;    // Đã hủy
     
     // Payment status constants
-    const PAYMENT_PENDING = 1;
-    const PAYMENT_PAID = 2;
-    const PAYMENT_FAILED = 3;
+    const PAYMENT_PENDING = 1;     // Chưa thanh toán
+    const PAYMENT_PAID = 2;        // Đã thanh toán
+    const PAYMENT_REFUNDED = 3;    // Đã hoàn tiền
 
     public function user()
     {
@@ -44,7 +52,25 @@ class Order extends Model
     {
         return $this->hasMany(ReturnRequest::class);
     }
+    
+    public function cancelRequests()
+    {
+        return $this->hasMany(CancelRequest::class);
+    }
+    
+    // Kiểm tra có thể yêu cầu hủy không
+    public function canRequestCancel()
+    {
+        return $this->order_status_id == 2 && 
+               $this->payment_method === 'vnpay' && 
+               !$this->cancelRequests()->where('status', 'pending')->exists();
+    }
     public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+    
+    public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
     }
@@ -52,7 +78,7 @@ class Order extends Model
     // Helper methods
     public function isCompleted()
     {
-        return $this->order_status_id == self::STATUS_COMPLETED;
+        return $this->order_status_id == self::STATUS_DELIVERED;
     }
     
     public function isPaid()
@@ -69,10 +95,10 @@ class Order extends Model
     {
         $statuses = [
             1 => 'Chờ xác nhận',
-            2 => 'Đã xác nhận', 
-            3 => 'Đang giao hàng',
-            4 => 'Đã giao hàng',
-            5 => 'Hoàn thành',
+            2 => 'Đã xác nhận (có thể hủy)', 
+            3 => 'Đang chuẩn bị',
+            4 => 'Đang giao hàng',
+            5 => 'Đã giao hàng',
             6 => 'Đã hủy'
         ];
         
@@ -84,9 +110,21 @@ class Order extends Model
         $statuses = [
             1 => 'Chưa thanh toán',
             2 => 'Đã thanh toán',
-            3 => 'Thanh toán thất bại'
+            3 => 'Đã hoàn tiền'
         ];
         
         return $statuses[$this->payment_status_id] ?? 'Không xác định';
+    }
+    
+    // Kiểm tra có thể hủy đơn hàng không
+    public function canCancel()
+    {
+        return in_array($this->order_status_id, [self::STATUS_PENDING, self::STATUS_CONFIRMED]);
+    }
+    
+    // Kiểm tra đơn hàng VNPay đã thanh toán
+    public function isVnpayPaid()
+    {
+        return $this->payment_method === 'vnpay' && $this->payment_status === 'paid';
     }
 }
