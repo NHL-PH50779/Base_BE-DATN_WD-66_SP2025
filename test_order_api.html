@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Order API</title>
+</head>
+<body>
+    <h1>Test Order API</h1>
+    <button onclick="testOrder()">Test Create Order</button>
+    <div id="result"></div>
+
+    <script>
+        async function testOrder() {
+            const orderData = {
+                name: "Tuan Test",
+                phone: "0345208573",
+                email: "test234@gmail.com",
+                address: "15, Hoành Sơn, Giao Thủy, Nam Định",
+                note: "",
+                payment_method: "vnpay",
+                total: 25020000,
+                coupon_code: null,
+                coupon_discount: 0,
+                items: [
+                    {
+                        id: 72,
+                        quantity: 1,
+                        price: "24990000.00"
+                    }
+                ]
+            };
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+                
+                if (response.ok) {
+                    alert('Order created successfully!');
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

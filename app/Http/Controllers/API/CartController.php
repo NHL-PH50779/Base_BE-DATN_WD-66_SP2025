@@ -15,7 +15,15 @@ class CartController extends Controller
     // Xem giỏ hàng
     public function index(Request $request)
     {
-        $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json([
+                'message' => 'Giỏ hàng trống',
+                'data' => ['items' => [], 'total' => 0]
+            ]);
+        }
+        
+        $cart = Cart::firstOrCreate(['user_id' => $user->id]);
         $items = $cart->items()->with(['product', 'productVariant'])->get();
         
         // Transform items to include stock info
@@ -40,6 +48,11 @@ class CartController extends Controller
     // Thêm sản phẩm/biến thể vào giỏ hàng
     public function store(Request $request)
     {
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
+        
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
             'product_variant_id' => 'nullable|exists:product_variants,id',
@@ -54,7 +67,7 @@ class CartController extends Controller
             ], 422);
         }
 
-        $cart = Cart::firstOrCreate(['user_id' => $request->user()->id]);
+        $cart = Cart::firstOrCreate(['user_id' => $user->id]);
         $product = Product::findOrFail($request->product_id);
 
         // Lấy giá từ request hoặc từ biến thể/sản phẩm
@@ -94,6 +107,11 @@ class CartController extends Controller
     // Cập nhật số lượng mục trong giỏ hàng
     public function update(Request $request, $id)
     {
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
+        
         $validator = Validator::make($request->all(), [
             'quantity' => 'required|integer|min:1'
         ]);
@@ -105,7 +123,7 @@ class CartController extends Controller
             ], 422);
         }
 
-        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $cart = Cart::where('user_id', $user->id)->firstOrFail();
         $item = CartItem::where('cart_id', $cart->id)->findOrFail($id);
 
         // Kiểm tra tồn kho
@@ -129,7 +147,12 @@ class CartController extends Controller
     // Xóa mục khỏi giỏ hàng
     public function destroy(Request $request, $id)
     {
-        $cart = Cart::where('user_id', $request->user()->id)->firstOrFail();
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
+        
+        $cart = Cart::where('user_id', $user->id)->firstOrFail();
         $item = CartItem::where('cart_id', $cart->id)->findOrFail($id);
         $item->delete();
 

@@ -17,9 +17,20 @@ class Order extends Model
         'address',
         'note',
         'payment_method',
+        'payment_status',
+        'status',
         'coupon_code',
         'coupon_discount',
+        'is_vnpay',
+        'cancel_requested',
+        'cancelled_at',
         'created_at',
+    ];
+
+    protected $casts = [
+        'is_vnpay' => 'boolean',
+        'cancel_requested' => 'boolean',
+        'cancelled_at' => 'datetime',
     ];
 
     // Order status constants
@@ -47,6 +58,11 @@ class Order extends Model
     public function items()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
     }
     
     // Helper methods

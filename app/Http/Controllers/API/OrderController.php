@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
@@ -10,6 +10,8 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\OrderItem;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 class OrderController extends Controller
 {
     public function checkout(Request $request)
@@ -46,8 +48,10 @@ try {
     // ✅ Tạo đơn hàng
     $order = Order::create([
         'user_id' => $user->id,
-        'order_status_id' => 1, // chờ xác nhận
-        'payment_status_id' => 1, // chưa thanh toán
+        'order_status_id' => Order::STATUS_PENDING,
+        'payment_status_id' => Order::PAYMENT_PENDING,
+        'status' => 'pending',
+        'payment_status' => 'unpaid',
         'total' => $total,
     ]);
 
@@ -87,7 +91,7 @@ try {
             'email' => 'nullable|email|max:255',
             'address' => 'required|string',
             'note' => 'nullable|string',
-            'payment_method' => 'required|in:cod,bank_transfer,credit_card',
+            'payment_method' => 'required|in:cod,vnpay',
             'total' => 'required|numeric|min:0',
             'coupon_code' => 'nullable|string',
             'coupon_discount' => 'nullable|numeric|min:0',
@@ -101,18 +105,42 @@ try {
             ], 422);
         }
 
-        $user = $request->user();
-        $cart = Cart::where('user_id', $user->id)->first();
-        if (!$cart || $cart->items->isEmpty()) {
-            return response()->json([
-                'message' => 'Giỏ hàng trống'
-            ], 400);
+        // Lấy user từ auth hoặc tạo guest user
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            // Tạo guest user tạm thời
+            $user = new \stdClass();
+            $user->id = null;
+        }
+        \Log::info('Order request data:', $request->all());
+        $cart = null;
+        if ($user->id) {
+            $cart = Cart::with('items')->where('user_id', $user->id)->first();
+        }
+        
+        // Nếu không có items trong request và không có cart, cho phép tạo đơn hàng trống
+        // (sẽ được xử lý bởi frontend)
+        if (!$request->items && (!$cart || $cart->items->isEmpty())) {
+            // Cho phép tạo đơn hàng trống cho guest checkout
+            \Log::info('Creating empty order for guest checkout');
+        }
+        
+        // Nếu có items trong request nhưng không có cart, tạo đơn hàng từ items
+        if ($request->items && (!$cart || $cart->items->isEmpty())) {
+            \Log::info('Creating order from request items without cart');
         }
 
         // Kiểm tra tồn kho trước khi đặt hàng
-        $cartItems = $request->items ? 
-            $cart->items->whereIn('id', collect($request->items)->pluck('id')) : 
-            $cart->items;
+        $cartItems = collect();
+        if ($request->items) {
+            // Nếu có items trong request, sử dụng items đó
+            if ($cart) {
+                $cartItems = $cart->items->whereIn('id', collect($request->items)->pluck('id'));
+            }
+        } else if ($cart) {
+            // Nếu không có items trong request, sử dụng toàn bộ cart
+            $cartItems = $cart->items;
+        }
             
         foreach ($cartItems as $cartItem) {
             if ($cartItem->product_variant_id) {
@@ -129,9 +157,7 @@ try {
         try {
             // Tạo đơn hàng
             $order = Order::create([
-                'user_id' => $user->id,
-                'order_status_id' => 1,
-                'payment_status_id' => 1,
+                'user_id' => $user->id ?? null,
                 'total' => $request->total,
                 'name' => $request->name,
                 'phone' => $request->phone,
@@ -140,40 +166,63 @@ try {
                 'note' => $request->note,
                 'payment_method' => $request->payment_method,
                 'coupon_code' => $request->coupon_code,
-                'coupon_discount' => $request->coupon_discount ?? 0
+                'coupon_discount' => $request->coupon_discount ?? 0,
+                'order_status_id' => Order::STATUS_PENDING,
+                'payment_status_id' => Order::PAYMENT_PENDING,
+                'status' => 'pending',
+                'payment_status' => 'unpaid'
             ]);
 
             // Tạo order items và trừ tồn kho
-            foreach ($cartItems as $cartItem) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'product_variant_id' => $cartItem->product_variant_id,
-                    'quantity' => $cartItem->quantity,
-                    'price' => $cartItem->price
-                ]);
-                
-                // Trừ tồn kho
-                if ($cartItem->product_variant_id) {
-                    $variant = ProductVariant::find($cartItem->product_variant_id);
-                    if ($variant) {
-                        $variant->decrement('stock', $cartItem->quantity);
+            // Tạo order items từ cart hoặc từ request items
+            if ($cartItems->isNotEmpty()) {
+                foreach ($cartItems as $cartItem) {
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $cartItem->product_id,
+                        'product_variant_id' => $cartItem->product_variant_id,
+                        'quantity' => $cartItem->quantity,
+                        'price' => $cartItem->price
+                    ]);
+                    
+                    // Trừ tồn kho
+                    if ($cartItem->product_variant_id) {
+                        $variant = ProductVariant::find($cartItem->product_variant_id);
+                        if ($variant) {
+                            $variant->decrement('stock', $cartItem->quantity);
+                        }
                     }
+                }
+            } else if ($request->items) {
+                // Nếu không có cart items nhưng có items trong request
+                foreach ($request->items as $item) {
+                    // Tạo order item trực tiếp từ request data
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $item['id'], // Sử dụng id từ request làm product_id
+                        'product_variant_id' => null, // Có thể null nếu không có variant
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price']
+                    ]);
                 }
             }
 
             // Xóa các items đã đặt hàng khỏi giỏ hàng
-            if ($request->items) {
-                $cart->items()->whereIn('id', collect($request->items)->pluck('id'))->delete();
-            } else {
-                $cart->items()->delete();
+            if ($cart) {
+                if ($request->items) {
+                    $cart->items()->whereIn('id', collect($request->items)->pluck('id'))->delete();
+                } else {
+                    $cart->items()->delete();
+                }
             }
 
             DB::commit();
             
             return response()->json([
                 'message' => 'Đặt hàng thành công',
-                'data' => $order->load(['items.product', 'items.productVariant'])
+                'data' => [
+                    'order' => $order->load(['items.product', 'items.productVariant'])
+                ]
             ], 201);
             
         } catch (\Exception $e) {
@@ -532,6 +581,106 @@ public function processRefund(Request $request, $id)
     return response()->json([
         'message' => $validated['approve'] ? 'Đã đồng ý hoàn hàng' : 'Đã từ chối hoàn hàng',
         'data' => $order->load(['returnRequests'])
+    ]);
+}
+
+// Yêu cầu hủy đơn VNPay
+public function cancelRequest(Request $request, $id)
+{
+    $user = $request->user();
+    $order = Order::where('id', $id)->where('user_id', $user->id)->first();
+    
+    if (!$order) {
+        return response()->json(['message' => 'Không tìm thấy đơn hàng'], 404);
+    }
+    
+    if (!$order->is_vnpay || $order->status !== 'success') {
+        return response()->json(['message' => 'Chỉ có thể yêu cầu hủy đơn VNPay đã thanh toán'], 400);
+    }
+    
+    if ($order->cancel_requested) {
+        return response()->json(['message' => 'Đã gửi yêu cầu hủy trước đó'], 400);
+    }
+    
+    $order->update(['cancel_requested' => true]);
+    
+    return response()->json([
+        'message' => 'Đã gửi yêu cầu hủy đơn hàng',
+        'data' => $order
+    ]);
+}
+
+// Admin duyệt yêu cầu hủy
+public function approveCancel(Request $request, $id)
+{
+    $user = auth('sanctum')->user();
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
+
+    $order = Order::findOrFail($id);
+    
+    if (!$order->cancel_requested) {
+        return response()->json(['message' => 'Đơn hàng chưa có yêu cầu hủy'], 400);
+    }
+    
+    DB::beginTransaction();
+    try {
+        // Cập nhật đơn hàng
+        $order->update([
+            'status' => 'cancelled',
+            'order_status_id' => Order::STATUS_CANCELLED,
+            'cancelled_at' => now()
+        ]);
+        
+        // Kiểm tra và tạo ví nếu chưa có
+        $wallet = Wallet::firstOrCreate(
+            ['user_id' => $order->user_id],
+            ['balance' => 0]
+        );
+        
+        // Cộng tiền vào ví
+        $wallet->increment('balance', $order->total);
+        
+        // Ghi lịch sử giao dịch
+        WalletTransaction::create([
+            'user_id' => $order->user_id,
+            'type' => 'refund',
+            'amount' => $order->total,
+            'description' => 'Hoàn tiền đơn hàng #' . $order->id,
+            'order_id' => $order->id
+        ]);
+        
+        DB::commit();
+        
+        return response()->json([
+            'message' => 'Đã duyệt hủy đơn và hoàn tiền vào ví',
+            'data' => $order
+        ]);
+        
+    } catch (\Exception $e) {
+        DB::rollback();
+        return response()->json([
+            'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+// Lấy thông tin ví
+public function getWallet(Request $request)
+{
+    $user = $request->user();
+    $wallet = Wallet::firstOrCreate(
+        ['user_id' => $user->id],
+        ['balance' => 0]
+    );
+    
+    return response()->json([
+        'message' => 'Thông tin ví',
+        'data' => [
+            'balance' => $wallet->balance,
+            'transactions' => $wallet->transactions()->latest()->take(10)->get()
+        ]
     ]);
 }
 

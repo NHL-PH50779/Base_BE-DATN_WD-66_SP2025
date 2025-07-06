@@ -16,6 +16,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
+            'csp' => \App\Http\Middleware\ContentSecurityPolicy::class,
+        ]);
+
+        // Sanctum middleware
+        $middleware->statefulApi();
+        
+        // CORS middleware
+        $middleware->web(append: [
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+        
+        $middleware->api(append: [
+            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
         // Tắt CSRF cho API routes
@@ -30,4 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Tự động hoàn thành đơn hàng mỗi ngày lúc 2:00 AM
         $schedule->command('orders:auto-complete')->dailyAt('02:00');
     })
+    ->withCommands([
+        \App\Console\Commands\UpdateVnpayOrderStatus::class,
+    ])
     ->create();

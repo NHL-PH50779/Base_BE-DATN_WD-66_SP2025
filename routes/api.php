@@ -2,7 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\{
+use App\Http\Controllers\API\{
     AuthController,
     ProductController,
     ProductVariantController,
@@ -24,15 +24,13 @@ use App\Http\Controllers\Api\{
     VoucherController,
     WishlistController,
     FlashSaleController,
-    FlashSalePurchaseController
+    FlashSalePurchaseController,
+    PaymentController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-
-// Upload route (cần đăng nhập)
-Route::middleware('auth:sanctum')->post('/upload', [UploadController::class, 'uploadImage']);
 
 Route::get('/products/search', [ProductController::class, 'search']);
 Route::get('/products', [ProductController::class, 'index']);
@@ -45,25 +43,31 @@ Route::get('/categories/{id}', [CategoryController::class, 'show']);
 Route::get('/products-by-brand/{id}', [ProductController::class, 'getByBrand']);
 Route::get('/products-by-category/{id}', [ProductController::class, 'getByCategory']);
 
-// Attributes - public routes
 Route::get('/attributes', [AttributeController::class, 'index']);
 Route::get('/attribute-values', [AttributeValueController::class, 'index']);
 
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{id}', [NewsController::class, 'show']);
 
-// Comments - public routes
 Route::get('/comments', [CommentController::class, 'index']);
 Route::get('/products/{id}/rating-stats', [CommentController::class, 'getProductRatingStats']);
 
-// Voucher validation - public
 Route::post('/vouchers/validate', [VoucherController::class, 'validateVoucher']);
 Route::get('/vouchers/available', [VoucherController::class, 'getAvailableVouchers']);
 
-// ✅ Client Routes (Yêu cầu đăng nhập)
-Route::middleware('auth:sanctum')->group(function () {
+// VNPay routes - public
+Route::post('/vnpay/create-payment', [\App\Http\Controllers\API\VNPayController::class, 'createPayment']);
+Route::get('/vnpay/return', [\App\Http\Controllers\API\VNPayController::class, 'vnpayReturn']);
+Route::get('/vnpay/ipn', [\App\Http\Controllers\API\VNPayController::class, 'vnpayIPN']);
+
+// ✅ Client Routes (Tạm thời không cần auth để test)
+// Route::middleware('auth:api')->group(function () {
+Route::group([], function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Upload
+    Route::post('/upload', [UploadController::class, 'uploadImage']);
 
     // Giỏ hàng
     Route::get('/cart', [CartController::class, 'index']);
@@ -71,13 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/cart/{id}', [CartController::class, 'update']);
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
 
-    // Cập nhật thông tin cá nhân
+    // Profile
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::put('/change-password', [AuthController::class, 'changePassword']);
-
-    // Yêu cầu hoàn hàng và hoàn tiền
-    Route::apiResource('return_requests', ReturnRequestController::class);
-    Route::apiResource('refunds', RefundController::class);
 
     // Thông báo
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -100,31 +100,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
         Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
         Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
-        
-        // Flash Sale Purchase
         Route::post('/purchase', [FlashSalePurchaseController::class, 'purchase']);
         Route::post('/validate-price', [FlashSalePurchaseController::class, 'validateFlashPrice']);
     });
 
-    // Flash Sale Management
-    Route::prefix('flash-sales')->group(function () {
-        Route::get('/', [FlashSaleController::class, 'adminIndex']);
-        Route::post('/', [FlashSaleController::class, 'adminStore']);
-        Route::get('/{id}', [FlashSaleController::class, 'show']);
-        Route::put('/{id}', [FlashSaleController::class, 'adminUpdate']);
-        Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
-    });
-
-    // News
-    Route::prefix('news')->group(function () {
-        Route::get('/', [NewsController::class, 'index']);
-        Route::get('/latest', [NewsController::class, 'latest']);
-        Route::get('/{id}', [NewsController::class, 'show']);
-    });
-
-
-
-    // Đặt hàng (cho phép client checkout và xem đơn hàng của họ)
+    // Đặt hàng
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
     Route::post('/orders', [OrderController::class, 'createOrder']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
@@ -132,21 +112,33 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
     Route::put('/orders/{id}/complete', [OrderController::class, 'confirmComplete']);
     Route::post('/orders/{id}/refund-request', [OrderController::class, 'requestRefund']);
+
+    // VNPay
+    Route::post('/payment/create-vnpay-url', [PaymentController::class, 'createVnpayUrl']);
+    Route::post('/payment/vnpay-callback', [PaymentController::class, 'vnpayCallback']);
+    Route::post('/orders/{id}/cancel-request', [OrderController::class, 'cancelRequest']);
+    
+    // Ví tiền
+    Route::get('/wallet', [OrderController::class, 'getWallet']);
+
+    // Return requests
+    Route::apiResource('return_requests', ReturnRequestController::class);
+    Route::apiResource('refunds', RefundController::class);
 });
 
-// ✅ Admin Routes  
-// Test endpoint
+// ✅ Admin Routes
 Route::get('/test', function () {
     return response()->json(['message' => 'API working', 'time' => now()]);
 });
 
-Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
-    // Quản lý tài khoản người dùng
+Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
+    // Users
     Route::get('/users', function () {
         return response()->json(['users' => \App\Models\User::all()]);
     });
+    Route::apiResource('users', UserController::class);
 
-    // Quản lý sản phẩm
+    // Products
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{id}', [ProductController::class, 'update']);
@@ -156,13 +148,13 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::delete('/products/force-delete/{id}', [ProductController::class, 'forceDelete']);
     Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
 
-    // Biến thể sản phẩm
+    // Product Variants
     Route::get('/products/{productId}/variants', [ProductVariantController::class, 'index']);
     Route::post('/products/{productId}/variants', [ProductVariantController::class, 'store']);
     Route::put('/variants/{id}', [ProductVariantController::class, 'update']);
     Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
 
-    // Thương hiệu, danh mục - CRUD operations
+    // Brands & Categories
     Route::get('/brands/{id}', [BrandController::class, 'show']);
     Route::post('/brands', [BrandController::class, 'store']);
     Route::put('/brands/{id}', [BrandController::class, 'update']);
@@ -173,65 +165,34 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::put('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
-    // Thuộc tính sản phẩm
+    // Attributes
     Route::apiResource('attributes', AttributeController::class);
     Route::apiResource('attribute-values', AttributeValueController::class);
 
-    // Tin tức
+    // News
     Route::post('/news', [NewsController::class, 'store']);
     Route::put('/news/{id}', [NewsController::class, 'update']);
     Route::delete('/news/{id}', [NewsController::class, 'destroy']);
 
-    // Quản lý banner
+    // Banners
     Route::apiResource('banners', BannerController::class);
 
-    // Dashboard stats
+    // Dashboard
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
-    Route::get('/stats', [DashboardController::class, 'getStats']); // Alias
+    Route::get('/stats', [DashboardController::class, 'getStats']);
 
-    // Quản lý người dùng (Admin)
-    Route::apiResource('users', UserController::class);
-
-    // Quản lý đơn hàng (Admin)
+    // Orders
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
-    Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
-    Route::post('/orders/auto-complete', [OrderController::class, 'autoComplete']);
-    Route::put('/orders/{id}/process-refund', [OrderController::class, 'processRefund']);
+    Route::post('/orders/{id}/approve-cancel', [OrderController::class, 'approveCancel']);
 
-    // Quản lý yêu cầu hoàn hàng (Admin)
-    Route::get('/return-requests', [ReturnRequestController::class, 'index']);
-    Route::put('/return-requests/{id}', [ReturnRequestController::class, 'update']);
-
-    // Thông báo admin
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'getUnreadCount']);
-
-    // Quản lý giỏ hàng (Admin)
-    Route::get('/carts', [CartController::class, 'adminIndex']);
-    Route::get('/carts/{userId}', [CartController::class, 'adminShow']);
-
-    // Quản lý bình luận (Admin)
-    Route::get('/comments', [CommentController::class, 'adminIndex']);
-    Route::put('/comments/{id}/status', [CommentController::class, 'updateStatus']);
-    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
-
-    // Quản lý voucher (Admin)
-    Route::apiResource('vouchers', VoucherController::class);
-    
-    // Quản lý tin tức (Admin)
-    Route::get('/news', [NewsController::class, 'adminIndex']);
-    Route::post('/news', [NewsController::class, 'store']);
-    Route::put('/news/{id}', [NewsController::class, 'update']);
-    Route::delete('/news/{id}', [NewsController::class, 'destroy']);
-});
-
-
-
-// ✅ Route fallback
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+    // Flash Sales
+    Route::prefix('flash-sales')->group(function () {
+        Route::get('/', [FlashSaleController::class, 'adminIndex']);
+        Route::post('/', [FlashSaleController::class, 'adminStore']);
+        Route::get('/{id}', [FlashSaleController::class, 'show']);
+        Route::put('/{id}', [FlashSaleController::class, 'adminUpdate']);
+        Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
+    });
 });

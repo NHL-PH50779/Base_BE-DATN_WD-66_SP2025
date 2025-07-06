@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chuyển hướng thanh toán</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <div style="text-align: center; padding: 50px;">
+        <h2>Đang chuyển hướng đến trang thanh toán...</h2>
+        <p>Vui lòng đợi trong giây lát.</p>
+    </div>
+    
+    <script>
+        // Lấy URL từ query parameter và redirect
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentUrl = urlParams.get('url');
+        
+        if (paymentUrl) {
+            setTimeout(() => {
+                window.location.href = decodeURIComponent(paymentUrl);
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

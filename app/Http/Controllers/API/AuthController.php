@@ -79,7 +79,13 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = auth('sanctum')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
+        
+        $user->currentAccessToken()->delete();
 
         return response()->json([
             'message' => 'Đăng xuất thành công'
@@ -88,7 +94,11 @@ class AuthController extends Controller
 
     public function user(Request $request)
     {
-        $user = $request->user();
+        $user = auth('sanctum')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
 
         return response()->json([
             'user' => [
@@ -109,7 +119,11 @@ class AuthController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $user = $request->user();
+        $user = auth('sanctum')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
         
         $request->validate([
             'name' => 'required|string|max:255',
@@ -153,7 +167,11 @@ class AuthController extends Controller
 
     public function changePassword(Request $request)
     {
-        $user = $request->user();
+        $user = auth('sanctum')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+        }
         
         $request->validate([
             'current_password' => 'required',

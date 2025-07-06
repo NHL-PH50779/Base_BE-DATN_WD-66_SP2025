@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 
 use Illuminate\Support\Facades\Storage;
@@ -15,7 +15,8 @@ class ProductController extends Controller
     // Lấy danh sách tất cả sản phẩm cùng biến thể
    public function index(Request $request)
 {
-    $query = Product::with(['variants', 'brand', 'category']);
+    $query = Product::with(['variants:id,product_id,price,stock,quantity,is_active', 'brand:id,name', 'category:id,name'])
+        ->select('id', 'name', 'description', 'brand_id', 'category_id', 'thumbnail', 'is_active', 'created_at', 'updated_at', 'deleted_at');
     
     // Filter theo brand_id nếu có
     if ($request->has('brand_id') && $request->brand_id) {
@@ -29,10 +30,8 @@ class ProductController extends Controller
     
     // Logic hiển thị sản phẩm
     if ($request->has('brand_id') || $request->has('category_id')) {
-        // Cho trang chi tiết: chỉ hiển thị sản phẩm active và chưa xóa
         $query->where('is_active', true);
     } else {
-        // Cho trang quản lý admin: hiển thị tất cả
         if (auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'super_admin')) {
             $query->withTrashed();
         } else {
@@ -40,7 +39,7 @@ class ProductController extends Controller
         }
     }
     
-    $products = $query->get();
+    $products = $query->limit(50)->get();
     
     // Thêm giá từ variant đầu tiên
     $products->each(function ($product) {
@@ -196,7 +195,7 @@ class ProductController extends Controller
     public function show($id)
 {
     $product = Product::withTrashed()
-        ->with('variants')
+        ->with(['variants:id,product_id,sku,Name,price,stock,quantity,is_active', 'brand:id,name', 'category:id,name'])
         ->find($id);
 
     if (!$product) {
@@ -288,7 +287,7 @@ public function forceDelete($id)
 
 public function getByBrand($brandId)
 {
-    $products = Product::with(['brand', 'category', 'variants'])
+    $products = Product::with(['brand', 'category', 'variants:id,product_id,price,stock,quantity,is_active'])
         ->where('brand_id', $brandId)
         ->where('is_active', true)
         ->get();
@@ -309,7 +308,7 @@ public function getByBrand($brandId)
 
 public function getByCategory($categoryId)
 {
-    $products = Product::with(['brand', 'category', 'variants'])
+    $products = Product::with(['brand', 'category', 'variants:id,product_id,price,stock,quantity,is_active'])
         ->where('category_id', $categoryId)
         ->where('is_active', true)
         ->get();
