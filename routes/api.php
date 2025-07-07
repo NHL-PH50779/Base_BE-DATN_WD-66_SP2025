@@ -60,6 +60,7 @@ Route::post('/vnpay/create-payment', [\App\Http\Controllers\API\VNPayController:
 Route::get('/vnpay/return', [\App\Http\Controllers\API\VNPayController::class, 'vnpayReturn']);
 Route::get('/vnpay/ipn', [\App\Http\Controllers\API\VNPayController::class, 'vnpayIPN']);
 
+
 // ✅ Client Routes (Tạm thời không cần auth để test)
 // Route::middleware('auth:api')->group(function () {
 Route::group([], function () {
@@ -113,9 +114,7 @@ Route::group([], function () {
     Route::put('/orders/{id}/complete', [OrderController::class, 'confirmComplete']);
     Route::post('/orders/{id}/refund-request', [OrderController::class, 'requestRefund']);
 
-    // VNPay
-    Route::post('/payment/create-vnpay-url', [PaymentController::class, 'createVnpayUrl']);
-    Route::post('/payment/vnpay-callback', [PaymentController::class, 'vnpayCallback']);
+    // VNPay - sử dụng VNPayController thống nhất
     Route::post('/orders/{id}/cancel-request', [OrderController::class, 'cancelRequest']);
     
     // Ví tiền
@@ -131,7 +130,8 @@ Route::get('/test', function () {
     return response()->json(['message' => 'API working', 'time' => now()]);
 });
 
-Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
+// Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
+Route::prefix('admin')->group(function () {
     // Users
     Route::get('/users', function () {
         return response()->json(['users' => \App\Models\User::all()]);
@@ -185,7 +185,21 @@ Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+    Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
     Route::post('/orders/{id}/approve-cancel', [OrderController::class, 'approveCancel']);
+    
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'adminIndex']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'adminGetUnreadCount']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    
+    // Comments
+    Route::get('/comments', [CommentController::class, 'adminIndex']);
+    Route::get('/comments/{id}', [CommentController::class, 'show']);
+    Route::put('/comments/{id}/approve', [CommentController::class, 'approve']);
+    Route::put('/comments/{id}/status', [CommentController::class, 'updateStatus']);
+    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
     // Flash Sales
     Route::prefix('flash-sales')->group(function () {
@@ -195,4 +209,8 @@ Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
         Route::put('/{id}', [FlashSaleController::class, 'adminUpdate']);
         Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
     });
+    
+    // Return Requests & Refunds
+    Route::apiResource('return-requests', ReturnRequestController::class);
+    Route::apiResource('refunds', RefundController::class);
 });

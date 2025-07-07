@@ -46,4 +46,17 @@ class NotificationController extends Controller
 
         return response()->json(['count' => $count]);
     }
+
+    // Admin methods
+    public function adminIndex()
+    {
+        $notifications = Notification::orderBy('created_at', 'desc')->get();
+        return response()->json(['data' => $notifications]);
+    }
+
+    public function adminGetUnreadCount()
+    {
+        $count = Notification::where('is_read', false)->count();
+        return response()->json(['count' => $count]);
+    }
 }

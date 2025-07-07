@@ -24,6 +24,10 @@ class Order extends Model
         'is_vnpay',
         'cancel_requested',
         'cancelled_at',
+        'vnpay_txn_ref',
+        'vnpay_transaction_no',
+        'vnpay_response_code',
+        'paid_at',
         'created_at',
     ];
 
@@ -31,6 +35,7 @@ class Order extends Model
         'is_vnpay' => 'boolean',
         'cancel_requested' => 'boolean',
         'cancelled_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     // Order status constants

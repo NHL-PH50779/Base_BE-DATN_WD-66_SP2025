@@ -10,6 +10,12 @@ class CommentController extends Controller
 {
     public function index(Request $request)
     {
+        // Kiểm tra nếu là admin request
+        $user = auth('sanctum')->user();
+        if ($user && ($user->role === 'admin' || $user->role === 'super_admin')) {
+            return $this->adminIndex();
+        }
+        
         $productId = $request->get('product_id');
         
         $query = Comment::with('user:id,name')
@@ -120,6 +126,27 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Cập nhật trạng thái thành công',
+            'data' => $comment->load(['user:id,name', 'product:id,name'])
+        ]);
+    }
+
+    public function show($id)
+    {
+        $comment = Comment::with(['user:id,name', 'product:id,name'])
+            ->findOrFail($id);
+            
+        return response()->json([
+            'data' => $comment
+        ]);
+    }
+    
+    public function approve($id)
+    {
+        $comment = Comment::findOrFail($id);
+        $comment->update(['status' => 'approved']);
+
+        return response()->json([
+            'message' => 'Duyệt bình luận thành công',
             'data' => $comment->load(['user:id,name', 'product:id,name'])
         ]);
     }
