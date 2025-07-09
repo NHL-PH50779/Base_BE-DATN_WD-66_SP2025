@@ -51,4 +51,19 @@ class User extends Authenticatable
     {
         return $this->hasMany(CartItem::class);
     }
+
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    // Auto create wallet when user created
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::created(function ($user) {
+            $user->wallet()->create(['balance' => 0]);
+        });
+    }
 }

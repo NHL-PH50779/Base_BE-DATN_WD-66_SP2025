@@ -23,6 +23,7 @@ class Order extends Model
         'coupon_discount',
         'is_vnpay',
         'cancel_requested',
+        'cancel_reason',
         'cancelled_at',
         'vnpay_txn_ref',
         'vnpay_transaction_no',

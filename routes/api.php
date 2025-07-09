@@ -61,9 +61,8 @@ Route::get('/vnpay/return', [\App\Http\Controllers\API\VNPayController::class, '
 Route::get('/vnpay/ipn', [\App\Http\Controllers\API\VNPayController::class, 'vnpayIPN']);
 
 
-// ✅ Client Routes (Tạm thời không cần auth để test)
-// Route::middleware('auth:api')->group(function () {
-Route::group([], function () {
+// ✅ Client Routes - Bật auth
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -118,7 +117,10 @@ Route::group([], function () {
     Route::post('/orders/{id}/cancel-request', [OrderController::class, 'cancelRequest']);
     
     // Ví tiền
-    Route::get('/wallet', [OrderController::class, 'getWallet']);
+    Route::get('/wallet', [\App\Http\Controllers\API\WalletController::class, 'getWallet']);
+    Route::get('/wallet/transactions', [\App\Http\Controllers\API\WalletController::class, 'getTransactions']);
+    Route::post('/wallet/deposit', [\App\Http\Controllers\API\WalletController::class, 'deposit']);
+    Route::post('/wallet/withdraw', [\App\Http\Controllers\API\WalletController::class, 'withdraw']);
 
     // Return requests
     Route::apiResource('return_requests', ReturnRequestController::class);
@@ -213,4 +215,8 @@ Route::prefix('admin')->group(function () {
     // Return Requests & Refunds
     Route::apiResource('return-requests', ReturnRequestController::class);
     Route::apiResource('refunds', RefundController::class);
+    
+    // Cancel Requests
+    Route::get('/cancel-requests', [OrderController::class, 'getCancelRequests']);
+    Route::post('/orders/{id}/reject-cancel', [OrderController::class, 'rejectCancel']);
 });

@@ -6,7 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 
 class WalletTransaction extends Model
 {
-    protected $fillable = ['user_id', 'type', 'amount', 'description', 'order_id'];
+    protected $fillable = [
+        'user_id',
+        'type',
+        'amount',
+        'balance_before',
+        'balance_after',
+        'description',
+        'reference_type',
+        'reference_id'
+    ];
+
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'balance_before' => 'decimal:2',
+        'balance_after' => 'decimal:2'
+    ];
 
     public function user()
     {
@@ -15,6 +30,7 @@ class WalletTransaction extends Model
 
     public function order()
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(Order::class, 'reference_id')
+            ->where('reference_type', 'order');
     }
 }
