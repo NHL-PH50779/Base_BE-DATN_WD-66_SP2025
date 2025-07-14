@@ -5,8 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Models\Cart;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserOtp;
+use App\Models\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\OtpMail;
+use App\Mail\SendOtpResetPasswordMail;
 
 class AuthController extends Controller
 {
@@ -46,18 +51,35 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
+            'password' => 'required|string|min:6',
+            'password_confirmation' => 'required|string|min:6|same:password',
+            'otp' => 'required|string|size:6'
         ]);
 
+        // Verify OTP first
+        $otpRecord = UserOtp::where('email', $validated['email'])
+            ->where('otp', $validated['otp'])
+            ->where('expires_at', '>', now())
+            ->first();
+            
+        if (!$otpRecord) {
+            return response()->json([
+                'message' => 'Mã OTP không đúng hoặc đã hết hạn'
+            ], 422);
+        }
+
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
             'role' => 'client',
         ]);
+
+        // Delete OTP after successful registration
+        $otpRecord->delete();
 
         // Create cart for new user
         Cart::create(['user_id' => $user->id]);
@@ -190,6 +212,125 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Đổi mật khẩu thành công'
+        ]);
+    }
+
+    public function sendOtp(Request $request)
+    {
+        $validated = $request->validate(['email' => 'required|email']);
+        
+        $otp = rand(100000, 999999);
+        
+        UserOtp::updateOrCreate(
+            ['email' => $validated['email']],
+            [
+                'otp' => $otp,
+                'expires_at' => now()->addMinutes(5)
+            ]
+        );
+        
+        try {
+            Mail::to($validated['email'])->send(new OtpMail($otp));
+            
+            return response()->json([
+                'message' => 'Đã gửi mã OTP đến email của bạn'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Lỗi khi gửi email: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    public function verifyOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required|string|size:6'
+        ]);
+        
+        $otpRecord = UserOtp::where('email', $validated['email'])
+            ->where('otp', $validated['otp'])
+            ->where('expires_at', '>', now())
+            ->first();
+            
+        if (!$otpRecord) {
+            return response()->json([
+                'message' => 'Mã OTP không đúng hoặc đã hết hạn'
+            ], 422);
+        }
+        
+        // Xóa OTP sau khi xác minh thành công
+        $otpRecord->delete();
+        
+        return response()->json([
+            'message' => 'Xác minh OTP thành công'
+        ]);
+    }
+
+    // Gửi OTP cho quên mật khẩu
+    public function forgotPassword(Request $request)
+    {
+        $validated = $request->validate(['email' => 'required|email']);
+        
+        $user = User::where('email', $validated['email'])->first();
+        if (!$user) {
+            return response()->json(['message' => 'Email không tồn tại'], 404);
+        }
+        
+        $otp = rand(100000, 999999);
+        
+        PasswordReset::updateOrCreate(
+            ['email' => $validated['email']],
+            [
+                'otp' => $otp,
+                'expires_at' => now()->addMinutes(5)
+            ]
+        );
+        
+        try {
+            Mail::to($validated['email'])->send(new SendOtpResetPasswordMail($otp));
+            
+            return response()->json([
+                'message' => 'OTP đã được gửi tới email'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Lỗi khi gửi email: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    // Đặt lại mật khẩu với OTP
+    public function resetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required|string|size:6',
+            'new_password' => 'required|string|min:6',
+            'new_password_confirmation' => 'required|string|min:6|same:new_password'
+        ]);
+        
+        $record = PasswordReset::where('email', $validated['email'])
+            ->where('otp', $validated['otp'])
+            ->where('expires_at', '>', now())
+            ->first();
+            
+        if (!$record) {
+            return response()->json([
+                'message' => 'OTP không hợp lệ hoặc đã hết hạn'
+            ], 400);
+        }
+        
+        $user = User::where('email', $validated['email'])->first();
+        $user->password = Hash::make($validated['new_password']);
+        $user->save();
+        
+        // Xóa OTP
+        PasswordReset::where('email', $validated['email'])->delete();
+        
+        return response()->json([
+            'message' => 'Đặt lại mật khẩu thành công'
         ]);
     }
 }

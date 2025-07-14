@@ -31,14 +31,18 @@ use App\Http\Controllers\API\{
 // ✅ Public Routes (Không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/send-otp', [AuthController::class, 'sendOtp']);
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('/products/search', [ProductController::class, 'search']);
-Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products', [ProductController::class, 'index'])->middleware('cache.headers:public;max_age=300');
 Route::get('/products/{id}', [ProductController::class, 'show']);
 
-Route::get('/brands', [BrandController::class, 'index']);
+Route::get('/brands', [BrandController::class, 'index'])->middleware('cache.headers:public;max_age=600');
 Route::get('/brands/{id}', [BrandController::class, 'show']);
-Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories', [CategoryController::class, 'index'])->middleware('cache.headers:public;max_age=600');
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
 Route::get('/products-by-brand/{id}', [ProductController::class, 'getByBrand']);
 Route::get('/products-by-category/{id}', [ProductController::class, 'getByCategory']);

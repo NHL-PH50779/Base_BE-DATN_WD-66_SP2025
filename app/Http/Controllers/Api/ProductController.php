@@ -15,45 +15,53 @@ class ProductController extends Controller
     // Lấy danh sách tất cả sản phẩm cùng biến thể
    public function index(Request $request)
 {
-    $query = Product::with(['variants:id,product_id,price,stock,quantity,is_active', 'brand:id,name', 'category:id,name'])
-        ->select('id', 'name', 'description', 'brand_id', 'category_id', 'thumbnail', 'is_active', 'created_at', 'updated_at', 'deleted_at');
+    // Cache key dựa trên parameters
+    $cacheKey = 'products_' . md5(serialize($request->all()));
     
-    // Filter theo brand_id nếu có
-    if ($request->has('brand_id') && $request->brand_id) {
-        $query->where('brand_id', $request->brand_id);
-    }
-    
-    // Filter theo category_id nếu có
-    if ($request->has('category_id') && $request->category_id) {
-        $query->where('category_id', $request->category_id);
-    }
-    
-    // Logic hiển thị sản phẩm
-    if ($request->has('brand_id') || $request->has('category_id')) {
-        $query->where('is_active', true);
-    } else {
-        if (auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'super_admin')) {
-            $query->withTrashed();
+    return cache()->remember($cacheKey, 300, function () use ($request) {
+        $query = Product::with([
+            'variants' => function($q) {
+                $q->select('id', 'product_id', 'price', 'stock', 'is_active')
+                  ->where('is_active', true)
+                  ->orderBy('price')
+                  ->limit(1);
+            },
+            'brand:id,name', 
+            'category:id,name'
+        ])->select('id', 'name', 'brand_id', 'category_id', 'thumbnail', 'is_active');
+        
+        // Filters
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
+        }
+        
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+        
+        // Permissions
+        if (!($request->has('brand_id') || $request->has('category_id'))) {
+            if (auth()->check() && in_array(auth()->user()->role, ['admin', 'super_admin'])) {
+                $query->withTrashed();
+            } else {
+                $query->where('is_active', true);
+            }
         } else {
             $query->where('is_active', true);
         }
-    }
-    
-    $products = $query->limit(50)->get();
-    
-    // Thêm giá từ variant đầu tiên
-    $products->each(function ($product) {
-        if ($product->variants && $product->variants->count() > 0) {
-            $product->price = $product->variants->first()->price;
-        } else {
-            $product->price = 0;
-        }
-    });
+        
+        $products = $query->limit(50)->get();
+        
+        // Add price from first variant
+        $products->each(function ($product) {
+            $product->price = $product->variants->first()->price ?? 0;
+        });
 
-    return response()->json([
-        'message' => 'Danh sách sản phẩm',
-        'data' => $products
-    ]);
+        return response()->json([
+            'message' => 'Danh sách sản phẩm',
+            'data' => $products
+        ]);
+    });
 }
 
 

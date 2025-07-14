@@ -8,6 +8,43 @@ use Illuminate\Http\Request;
 
 class NewsController extends Controller
 {
+    public function index()
+    {
+        try {
+            $news = News::where('is_active', true)
+                ->orderBy('published_at', 'desc')
+                ->select('id', 'title', 'description', 'thumbnail', 'published_at')
+                ->paginate(10);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $news
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lấy danh sách tin tức'
+            ], 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $news = News::where('is_active', true)->findOrFail($id);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $news
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không tìm thấy tin tức'
+            ], 404);
+        }
+    }
+
     public function adminIndex()
     {
         try {

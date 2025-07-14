@@ -19,8 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'csp' => \App\Http\Middleware\ContentSecurityPolicy::class,
         ]);
 
-        // Sanctum middleware - tạm thời tắt để test
-        // $middleware->statefulApi();
+        // Sanctum middleware
+        $middleware->statefulApi();
         
         // CORS middleware
         $middleware->web(append: [
