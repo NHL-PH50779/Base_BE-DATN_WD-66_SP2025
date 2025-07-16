@@ -146,8 +146,17 @@ try {
             
         foreach ($cartItems as $cartItem) {
             if ($cartItem->product_variant_id) {
+                // Kiểm tra stock của variant
                 $variant = ProductVariant::find($cartItem->product_variant_id);
                 if (!$variant || $variant->stock < $cartItem->quantity) {
+                    return response()->json([
+                        'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho"
+                    ], 400);
+                }
+            } else {
+                // Kiểm tra stock của product chính
+                $product = \App\Models\Product::find($cartItem->product_id);
+                if (!$product || !isset($product->stock) || $product->stock < $cartItem->quantity) {
                     return response()->json([
                         'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho"
                     ], 400);
@@ -189,9 +198,16 @@ try {
                     
                     // Trừ tồn kho
                     if ($cartItem->product_variant_id) {
+                        // Trừ stock của variant
                         $variant = ProductVariant::find($cartItem->product_variant_id);
                         if ($variant) {
                             $variant->decrement('stock', $cartItem->quantity);
+                        }
+                    } else {
+                        // Trừ stock của product chính
+                        $product = \App\Models\Product::find($cartItem->product_id);
+                        if ($product && isset($product->stock)) {
+                            $product->decrement('stock', $cartItem->quantity);
                         }
                     }
                 }
@@ -420,11 +436,19 @@ public function cancelOrder(Request $request, $id)
     try {
         $order->update(['order_status_id' => 6]);
         
+        // Hoàn lại tồn kho khi hủy đơn
         foreach ($order->items as $item) {
             if ($item->product_variant_id) {
+                // Hoàn stock cho variant
                 $variant = ProductVariant::find($item->product_variant_id);
                 if ($variant) {
                     $variant->increment('stock', $item->quantity);
+                }
+            } else {
+                // Hoàn stock cho product chính
+                $product = \App\Models\Product::find($item->product_id);
+                if ($product && isset($product->stock)) {
+                    $product->increment('stock', $item->quantity);
                 }
             }
         }

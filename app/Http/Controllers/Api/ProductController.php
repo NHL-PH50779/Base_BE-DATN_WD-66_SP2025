@@ -28,7 +28,7 @@ class ProductController extends Controller
             },
             'brand:id,name', 
             'category:id,name'
-        ])->select('id', 'name', 'brand_id', 'category_id', 'thumbnail', 'is_active');
+        ])->select('id', 'name', 'price', 'stock', 'brand_id', 'category_id', 'thumbnail', 'is_active');
         
         // Filters
         if ($request->filled('brand_id')) {
@@ -52,9 +52,15 @@ class ProductController extends Controller
         
         $products = $query->limit(50)->get();
         
-        // Add price from first variant
+        // Add price from first variant if product price is 0
         $products->each(function ($product) {
-            $product->price = $product->variants->first()->price ?? 0;
+            if (!$product->price && $product->variants->first()) {
+                $product->price = $product->variants->first()->price ?? 0;
+            }
+            // Add stock info
+            if (!$product->stock && $product->variants->first()) {
+                $product->stock = $product->variants->first()->stock ?? 0;
+            }
         });
 
         return response()->json([

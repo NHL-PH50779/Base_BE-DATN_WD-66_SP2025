@@ -58,6 +58,10 @@ class FlashSalePurchaseController extends Controller
 
             // Cập nhật số lượng đã bán
             $flashSaleItem->increment('sold_quantity', $request->quantity);
+            
+            // Clear cache để cập nhật dữ liệu mới
+            \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+            \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$flashSaleItem->product_id}");
 
             // Tính tổng tiền theo giá flash sale
             $totalPrice = $flashSaleItem->sale_price * $request->quantity;

@@ -15,7 +15,7 @@ class FlashSaleController extends Controller
     // Lấy flash sale hiện tại
     public function current()
     {
-        $flashSale = Cache::remember('current_flash_sale', 300, function () {
+        $flashSale = Cache::remember('current_flash_sale', 60, function () {
             return FlashSale::with(['activeItems.product.brand', 'activeItems.product.category'])
                 ->active()
                 ->current()

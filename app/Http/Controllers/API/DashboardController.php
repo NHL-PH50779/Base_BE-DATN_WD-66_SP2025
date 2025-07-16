@@ -47,19 +47,35 @@ class DashboardController extends Controller
                     ];
                 });
             
-            // Tổng doanh thu
-            $totalRevenue = Order::where('order_status_id', 4)->sum('total'); // Chỉ tính đơn đã giao
+            // Tổng doanh thu (tính cả đơn đã xác nhận)
+            $totalRevenue = Order::whereIn('order_status_id', [2, 3, 4])->sum('total');
             
             // Đơn hàng trong tháng này
             $ordersThisMonth = Order::whereMonth('created_at', now()->month)
                 ->whereYear('created_at', now()->year)
                 ->count();
             
-            // Doanh thu trong tháng này
-            $revenueThisMonth = Order::where('order_status_id', 4)
+            // Doanh thu trong tháng này (tính cả đơn đã xác nhận)
+            $revenueThisMonth = Order::whereIn('order_status_id', [2, 3, 4])
                 ->whereMonth('created_at', now()->month)
                 ->whereYear('created_at', now()->year)
                 ->sum('total');
+            
+            // Doanh thu theo từng tháng trong năm
+            $monthlyRevenue = [];
+            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            for ($i = 1; $i <= 12; $i++) {
+                $revenue = Order::whereIn('order_status_id', [2, 3, 4])
+                    ->whereMonth('created_at', $i)
+                    ->whereYear('created_at', now()->year)
+                    ->sum('total');
+                    
+                $monthlyRevenue[] = [
+                    'month' => $months[$i - 1],
+                    'revenue' => (int) $revenue
+                ];
+            }
 
             return response()->json([
                 'message' => 'Thống kê dashboard',
@@ -75,7 +91,8 @@ class DashboardController extends Controller
                     'this_month' => [
                         'orders' => $ordersThisMonth,
                         'revenue' => $revenueThisMonth
-                    ]
+                    ],
+                    'monthly_revenue' => $monthlyRevenue
                 ]
             ]);
             
