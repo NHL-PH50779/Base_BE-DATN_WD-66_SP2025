@@ -55,6 +55,17 @@ Route::get('/news/{id}', [NewsController::class, 'show']);
 
 Route::get('/comments', [CommentController::class, 'index']);
 Route::get('/products/{id}/rating-stats', [CommentController::class, 'getProductRatingStats']);
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{id}', [ProductController::class, 'show']);
+Route::get('/categories', [CategoryController::class, 'index']);
+
+// Flash Sale - public routes
+Route::prefix('flash-sale')->group(function () {
+    Route::get('/current', [FlashSaleController::class, 'current']);
+    Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
+    Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
+    Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
+});
 
 Route::post('/vouchers/validate', [VoucherController::class, 'validateVoucher']);
 Route::get('/vouchers/available', [VoucherController::class, 'getAvailableVouchers']);
@@ -98,15 +109,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/wishlist/check', [WishlistController::class, 'check']);
     Route::delete('/wishlist/{id}', [WishlistController::class, 'destroy']);
 
-    // Flash Sale
-    Route::prefix('flash-sale')->group(function () {
-        Route::get('/current', [FlashSaleController::class, 'current']);
-        Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
-        Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
-        Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
-        Route::post('/purchase', [FlashSalePurchaseController::class, 'purchase']);
-        Route::post('/validate-price', [FlashSalePurchaseController::class, 'validateFlashPrice']);
-    });
+    // Flash Sale - moved to public
+    // Route::prefix('flash-sale')->group(function () {
+    //     Route::get('/current', [FlashSaleController::class, 'current']);
+    //     Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
+    //     Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
+    //     Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
+    //     Route::post('/purchase', [FlashSalePurchaseController::class, 'purchase']);
+    //     Route::post('/validate-price', [FlashSalePurchaseController::class, 'validateFlashPrice']);
+    // });
 
     // Đặt hàng
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);

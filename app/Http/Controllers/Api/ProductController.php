@@ -18,7 +18,7 @@ class ProductController extends Controller
     // Cache key dựa trên parameters
     $cacheKey = 'products_' . md5(serialize($request->all()));
     
-    return cache()->remember($cacheKey, 300, function () use ($request) {
+    return cache()->remember($cacheKey, 600, function () use ($request) {
         $query = Product::with([
             'variants' => function($q) {
                 $q->select('id', 'product_id', 'price', 'stock', 'is_active')
@@ -50,7 +50,7 @@ class ProductController extends Controller
             $query->where('is_active', true);
         }
         
-        $products = $query->limit(50)->get();
+        $products = $query->limit(20)->get();
         
         // Add price from first variant if product price is 0
         $products->each(function ($product) {
@@ -209,7 +209,13 @@ class ProductController extends Controller
     public function show($id)
 {
     $product = Product::withTrashed()
-        ->with(['variants:id,product_id,sku,Name,price,stock,quantity,is_active', 'brand:id,name', 'category:id,name'])
+        ->with([
+            'variants' => function($q) {
+                $q->select('id', 'product_id', 'sku', 'Name', 'price', 'stock', 'quantity', 'is_active');
+            }, 
+            'brand:id,name', 
+            'category:id,name'
+        ])
         ->find($id);
 
     if (!$product) {

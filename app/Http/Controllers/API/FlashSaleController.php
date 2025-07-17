@@ -15,8 +15,13 @@ class FlashSaleController extends Controller
     // Lấy flash sale hiện tại
     public function current()
     {
-        $flashSale = Cache::remember('current_flash_sale', 60, function () {
-            return FlashSale::with(['activeItems.product.brand', 'activeItems.product.category'])
+        // Giảm độ phức tạp của query và tăng thời gian cache
+        $flashSale = Cache::remember('current_flash_sale', 300, function () {
+            return FlashSale::with(['activeItems' => function($q) {
+                    $q->with(['product' => function($q) {
+                        $q->select('id', 'name', 'thumbnail', 'brand_id', 'category_id');
+                    }]);
+                }])
                 ->active()
                 ->current()
                 ->first();
@@ -40,6 +45,11 @@ class FlashSaleController extends Controller
                 'time_remaining' => $flashSale->time_remaining,
                 'status' => $flashSale->status,
                 'items' => $flashSale->activeItems->map(function ($item) {
+                    // Thêm kiểm tra null cho product
+                    if (!$item->product) {
+                        return null;
+                    }
+                    
                     return [
                         'id' => $item->id,
                         'product_id' => $item->product_id,
@@ -47,19 +57,19 @@ class FlashSaleController extends Controller
                             'id' => $item->product->id,
                             'name' => $item->product->name,
                             'thumbnail' => $item->product->thumbnail,
-                            'brand' => $item->product->brand,
-                            'category' => $item->product->category
+                            'brand' => $item->product->brand_id ?? null,
+                            'category' => $item->product->category_id ?? null
                         ],
-                        'original_price' => $item->original_price,
-                        'sale_price' => $item->sale_price,
-                        'discount_percentage' => $item->discount_percentage,
-                        'quantity_limit' => $item->quantity_limit,
-                        'sold_quantity' => $item->sold_quantity,
-                        'remaining_quantity' => $item->remaining_quantity,
-                        'sold_percentage' => $item->sold_percentage,
-                        'is_available' => $item->is_available
+                        'original_price' => (float)$item->original_price,
+                        'sale_price' => (float)$item->sale_price,
+                        'discount_percentage' => (int)$item->discount_percentage,
+                        'quantity_limit' => (int)$item->quantity_limit,
+                        'sold_quantity' => (int)$item->sold_quantity,
+                        'remaining_quantity' => (int)$item->remaining_quantity,
+                        'sold_percentage' => (float)$item->sold_percentage,
+                        'is_available' => (bool)$item->is_available
                     ];
-                })
+                })->filter()->values()
             ]
         ]);
     }
@@ -67,8 +77,9 @@ class FlashSaleController extends Controller
     // Lấy flash sale sắp tới
     public function upcoming()
     {
-        $flashSale = Cache::remember('upcoming_flash_sale', 300, function () {
-            return FlashSale::with(['activeItems.product'])
+        // Đơn giản hóa query và tăng thời gian cache
+        $flashSale = Cache::remember('upcoming_flash_sale', 600, function () {
+            return FlashSale::select('id', 'name', 'description', 'start_time', 'end_time', 'is_active')
                 ->active()
                 ->upcoming()
                 ->orderBy('start_time')
