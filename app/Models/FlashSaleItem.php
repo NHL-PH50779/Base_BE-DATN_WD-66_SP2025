@@ -77,4 +77,14 @@ class FlashSaleItem extends Model
         $this->increment('sold_quantity', $quantity);
         return true;
     }
+    
+    public function decrementSoldQuantity(int $quantity = 1): bool
+    {
+        if ($this->sold_quantity - $quantity < 0) {
+            return false;
+        }
+
+        $this->decrement('sold_quantity', $quantity);
+        return true;
+    }
 }

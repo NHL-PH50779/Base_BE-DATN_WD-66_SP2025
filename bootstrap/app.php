@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'csp' => \App\Http\Middleware\ContentSecurityPolicy::class,
+            'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
         ]);
 
         // Sanctum middleware

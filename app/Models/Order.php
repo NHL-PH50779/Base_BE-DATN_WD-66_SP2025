@@ -24,6 +24,8 @@ class Order extends Model
         'is_vnpay',
         'cancel_requested',
         'cancel_reason',
+        'return_requested',
+        'return_reason',
         'cancelled_at',
         'vnpay_txn_ref',
         'vnpay_transaction_no',
@@ -46,6 +48,9 @@ class Order extends Model
     const STATUS_DELIVERED = 4;
     const STATUS_COMPLETED = 5;
     const STATUS_CANCELLED = 6;
+    const STATUS_RETURN_REQUESTED = 7;
+    const STATUS_RETURN_APPROVED = 8;
+    const STATUS_RETURN_REJECTED = 9;
     
     // Payment status constants
     const PAYMENT_PENDING = 1;
@@ -95,7 +100,10 @@ class Order extends Model
             3 => 'Đang giao hàng',
             4 => 'Đã giao hàng',
             5 => 'Hoàn thành',
-            6 => 'Đã hủy'
+            6 => 'Đã hủy',
+            7 => 'Yêu cầu hoàn hàng',
+            8 => 'Đồng ý hoàn hàng',
+            9 => 'Từ chối hoàn hàng'
         ];
         
         return $statuses[$this->order_status_id] ?? 'Không xác định';

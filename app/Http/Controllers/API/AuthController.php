@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Models\Cart;
 use App\Http\Controllers\Controller;
@@ -219,8 +219,26 @@ class AuthController extends Controller
     {
         $validated = $request->validate(['email' => 'required|email']);
         
+        // Kiểm tra email đã tồn tại chưa - TRƯỚC KHI GỬI EMAIL
+        $existingUser = User::where('email', $validated['email'])->first();
+        if ($existingUser) {
+            \Log::info('Email already exists: ' . $validated['email']);
+            return response()->json([
+                'message' => 'Email này đã được sử dụng. Vui lòng chọn email khác.'
+            ], 422);
+        }
+        
+        // Kiểm tra cấu hình mail trước khi tạo OTP
+        if (!config('mail.mailers.smtp.username') || !config('mail.mailers.smtp.password')) {
+            \Log::error('Mail configuration missing');
+            return response()->json([
+                'message' => 'Cấu hình email chưa được thiết lập'
+            ], 500);
+        }
+        
         $otp = rand(100000, 999999);
         
+        // Lưu OTP vào database
         UserOtp::updateOrCreate(
             ['email' => $validated['email']],
             [
@@ -232,12 +250,23 @@ class AuthController extends Controller
         try {
             Mail::to($validated['email'])->send(new OtpMail($otp));
             
+            \Log::info('OTP sent successfully to: ' . $validated['email']);
+            
             return response()->json([
                 'message' => 'Đã gửi mã OTP đến email của bạn'
             ]);
         } catch (\Exception $e) {
+            \Log::error('Mail sending failed: ' . $e->getMessage(), [
+                'email' => $validated['email'],
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // Xóa OTP nếu gửi mail thất bại
+            UserOtp::where('email', $validated['email'])->delete();
+            
             return response()->json([
-                'message' => 'Lỗi khi gửi email: ' . $e->getMessage()
+                'message' => 'Lỗi khi gửi email. Vui lòng thử lại sau.',
+                'debug' => app()->environment('local') ? $e->getMessage() : null
             ], 500);
         }
     }

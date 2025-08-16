@@ -39,10 +39,11 @@ class ProductController extends Controller
             $query->where('category_id', $request->category_id);
         }
         
-        // Permissions
+        // Permissions - Admin cũng chỉ thấy sản phẩm chưa xóa trong danh sách chính
         if (!($request->has('brand_id') || $request->has('category_id'))) {
             if (auth()->check() && in_array(auth()->user()->role, ['admin', 'super_admin'])) {
-                $query->withTrashed();
+                // Admin thấy tất cả sản phẩm chưa xóa (kể cả is_active = false)
+                // Sản phẩm đã xóa sẽ xem ở trang trashed riêng
             } else {
                 $query->where('is_active', true);
             }
@@ -50,7 +51,7 @@ class ProductController extends Controller
             $query->where('is_active', true);
         }
         
-        $products = $query->limit(20)->get();
+        $products = $query->orderBy('updated_at', 'desc')->limit(20)->get();
         
         // Add price from first variant if product price is 0
         $products->each(function ($product) {
@@ -136,7 +137,20 @@ class ProductController extends Controller
                 'is_active' => $variantData['is_active'] ?? true,
             ]);
         }
+    } else {
+        // Tạo variant mặc định nếu không có
+        $product->variants()->create([
+            'sku' => 'SKU-' . $product->id . '-DEFAULT',
+            'Name' => 'Mặc định',
+            'price' => 0,
+            'stock' => 1,
+            'quantity' => 1,
+            'is_active' => true,
+        ]);
     }
+    
+    // Clear cache sau khi thêm sản phẩm
+    cache()->flush();
 
     return response()->json($product->load('variants'), 201);
 }
@@ -198,6 +212,9 @@ class ProductController extends Controller
         }
     }
 
+    // Clear cache sau khi cập nhật
+    cache()->flush();
+    
     return response()->json([
         'message' => 'Cập nhật sản phẩm thành công!',
         'data' => $product->load('variants')
@@ -231,13 +248,20 @@ class ProductController extends Controller
     // Xóa mềm sản phẩm
     public function destroy($id)
     {
-        $product = Product::find($id);
+        $product = Product::withTrashed()->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
         }
+        
+        if ($product->trashed()) {
+            return response()->json(['message' => 'Sản phẩm đã được xóa trước đó'], 400);
+        }
 
         $product->delete();
+        
+        // Clear cache sau khi xóa
+        cache()->flush();
 
         return response()->json(['message' => 'Xóa (mềm) sản phẩm thành công']);
     }
@@ -246,17 +270,42 @@ class ProductController extends Controller
     // Khôi phục sản phẩm
     public function restore($id)
     {
-        $product = Product::onlyTrashed()->find($id);
+        $product = Product::onlyTrashed()->with('variants')->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Không tìm thấy sản phẩm đã xóa'], 404);
         }
 
         $product->restore();
+        
+        // Khôi phục cả variants nếu có
+        if ($product->variants) {
+            foreach ($product->variants as $variant) {
+                if ($variant->trashed()) {
+                    $variant->restore();
+                }
+                // Đảm bảo variant có stock và active
+                if ($variant->stock <= 0) {
+                    $variant->update(['stock' => 1]);
+                }
+                if (!$variant->is_active) {
+                    $variant->update(['is_active' => true]);
+                }
+            }
+        }
+        
+        // Đảm bảo sản phẩm active
+        $product->update(['is_active' => true]);
+        
+        // Cập nhật updated_at để sản phẩm lên đầu danh sách
+        $product->touch();
+        
+        // Clear cache sau khi khôi phục
+        cache()->flush();
 
         return response()->json([
             'message' => 'Khôi phục sản phẩm thành công',
-            'data' => $product
+            'data' => $product->load('variants')
         ]);
     }
 

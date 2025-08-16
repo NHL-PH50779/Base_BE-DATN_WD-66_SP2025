@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Models\ReturnRequest;
 use App\Models\Notification;
@@ -14,7 +14,10 @@ class ReturnRequestController extends Controller
     public function index()
     {
         $returnRequests = ReturnRequest::with(['user', 'order'])->get();
-        return response()->json($returnRequests);
+        return response()->json([
+            'message' => 'Danh sách yêu cầu hoàn hàng',
+            'data' => $returnRequests
+        ]);
     }
 
     

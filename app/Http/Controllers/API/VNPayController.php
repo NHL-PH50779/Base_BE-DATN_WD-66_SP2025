@@ -236,6 +236,21 @@ class VNPayController extends Controller
 
                 // Cập nhật đơn hàng nếu thanh toán thành công
                 if ($vnp_ResponseCode === '00') {
+                    // Trừ stock khi thanh toán thành công
+                    foreach ($order->items as $item) {
+                        if ($item->product_variant_id) {
+                            $variant = \App\Models\ProductVariant::find($item->product_variant_id);
+                            if ($variant && $variant->stock >= $item->quantity) {
+                                $variant->decrement('stock', $item->quantity);
+                            }
+                        } else {
+                            $product = \App\Models\Product::find($item->product_id);
+                            if ($product && isset($product->stock) && $product->stock >= $item->quantity) {
+                                $product->decrement('stock', $item->quantity);
+                            }
+                        }
+                    }
+                    
                     $order->update([
                         'payment_status' => 'paid',
                         'payment_status_id' => Order::PAYMENT_PAID,
@@ -376,6 +391,21 @@ class VNPayController extends Controller
                 ]);
 
                 if ($vnp_ResponseCode === '00') {
+                    // Trừ stock khi thanh toán thành công (IPN)
+                    foreach ($order->items as $item) {
+                        if ($item->product_variant_id) {
+                            $variant = \App\Models\ProductVariant::find($item->product_variant_id);
+                            if ($variant && $variant->stock >= $item->quantity) {
+                                $variant->decrement('stock', $item->quantity);
+                            }
+                        } else {
+                            $product = \App\Models\Product::find($item->product_id);
+                            if ($product && isset($product->stock) && $product->stock >= $item->quantity) {
+                                $product->decrement('stock', $item->quantity);
+                            }
+                        }
+                    }
+                    
                     // Cập nhật đơn hàng thành công
                     $order->update([
                         'payment_status' => 'paid',

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
@@ -11,11 +11,13 @@ class BrandController extends Controller
 {
     public function index()
     {
-        $brands = Brand::withCount(['products' => function ($query) {
-            $query->where('is_active', true);
-        }])
-            ->orderBy('name')
-            ->get();
+        $brands = \Cache::remember('brands', 600, function () {
+            return Brand::withCount(['products' => function ($query) {
+                $query->where('is_active', true);
+            }])
+                ->orderBy('name')
+                ->get();
+        });
         
         return response()->json([
             'message' => 'Danh sách thương hiệu',
@@ -39,6 +41,10 @@ class BrandController extends Controller
         $brand = Brand::create([
             'name' => $request->name
         ]);
+        
+        // Clear cache sau khi thêm
+        \Cache::forget('brands');
+        cache()->flush();
 
         return response()->json([
             'message' => 'Thêm thương hiệu thành công',
@@ -89,6 +95,10 @@ class BrandController extends Controller
         $brand->update([
             'name' => $request->name
         ]);
+        
+        // Clear cache sau khi cập nhật
+        \Cache::forget('brands');
+        cache()->flush();
 
         return response()->json([
             'message' => 'Cập nhật thương hiệu thành công',
@@ -128,6 +138,10 @@ class BrandController extends Controller
                 ->update(['brand_id' => $unbranded->id]);
 
             $brand->delete();
+            
+            // Clear cache sau khi xóa
+            \Cache::forget('brands');
+            cache()->flush();
             
             \DB::commit();
 

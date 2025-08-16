@@ -30,7 +30,7 @@ use App\Http\Controllers\API\{
 
 // ✅ Public Routes (Không cần đăng nhập)
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/send-otp', [AuthController::class, 'sendOtp']);
 Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
@@ -69,6 +69,9 @@ Route::prefix('flash-sale')->group(function () {
 
 Route::post('/vouchers/validate', [VoucherController::class, 'validateVoucher']);
 Route::get('/vouchers/available', [VoucherController::class, 'getAvailableVouchers']);
+
+// Guest checkout - public
+Route::post('/orders', [OrderController::class, 'createOrder']);
 
 // VNPay routes - public
 Route::post('/vnpay/create-payment', [\App\Http\Controllers\API\VNPayController::class, 'createPayment']);
@@ -121,7 +124,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Đặt hàng
     Route::post('/orders/checkout', [OrderController::class, 'checkout']);
-    Route::post('/orders', [OrderController::class, 'createOrder']);
     Route::get('/my-orders', [OrderController::class, 'myOrders']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::put('/orders/{id}/cancel', [OrderController::class, 'cancelOrder']);
@@ -147,8 +149,80 @@ Route::get('/test', function () {
     return response()->json(['message' => 'API working', 'time' => now()]);
 });
 
-// Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
-Route::prefix('admin')->group(function () {
+// Test mail endpoint
+Route::get('/test-mail', function () {
+    try {
+        $otp = rand(100000, 999999);
+        \Mail::to('test@example.com')->send(new \App\Mail\OtpMail($otp));
+        return response()->json([
+            'message' => 'Test mail sent successfully',
+            'otp' => $otp,
+            'mail_config' => [
+                'mailer' => config('mail.default'),
+                'host' => config('mail.mailers.smtp.host'),
+                'port' => config('mail.mailers.smtp.port'),
+                'username' => config('mail.mailers.smtp.username'),
+                'from' => config('mail.from')
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Mail test failed',
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
+// Debug OTP flow
+Route::post('/debug-otp', function (\Illuminate\Http\Request $request) {
+    $email = $request->input('email', 'test@example.com');
+    
+    try {
+        // Kiểm tra user tồn tại
+        $existingUser = \App\Models\User::where('email', $email)->first();
+        
+        $result = [
+            'email' => $email,
+            'user_exists' => !!$existingUser,
+            'mail_config' => [
+                'mailer' => config('mail.default'),
+                'host' => config('mail.mailers.smtp.host'),
+                'username' => config('mail.mailers.smtp.username'),
+                'from' => config('mail.from')
+            ]
+        ];
+        
+        if ($existingUser) {
+            $result['message'] = 'Email đã tồn tại - không thể gửi OTP';
+            return response()->json($result, 422);
+        }
+        
+        // Tạo OTP
+        $otp = rand(100000, 999999);
+        \App\Models\UserOtp::updateOrCreate(
+            ['email' => $email],
+            ['otp' => $otp, 'expires_at' => now()->addMinutes(5)]
+        );
+        
+        // Gửi mail
+        \Mail::to($email)->send(new \App\Mail\OtpMail($otp));
+        
+        $result['otp'] = $otp;
+        $result['message'] = 'OTP sent successfully';
+        
+        return response()->json($result);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'email' => $email,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
+Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Users
     Route::get('/users', function () {
         return response()->json(['users' => \App\Models\User::all()]);
@@ -203,6 +277,7 @@ Route::prefix('admin')->group(function () {
     Route::get('/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
     Route::put('/orders/{id}/order-status', [OrderController::class, 'updateOrderStatus']);
+    Route::put('/orders/{id}/payment-status', [OrderController::class, 'updatePaymentStatus']);
     Route::post('/orders/{id}/approve-cancel', [OrderController::class, 'approveCancel']);
     
     // Notifications
@@ -234,4 +309,44 @@ Route::prefix('admin')->group(function () {
     // Cancel Requests
     Route::get('/cancel-requests', [OrderController::class, 'getCancelRequests']);
     Route::post('/orders/{id}/reject-cancel', [OrderController::class, 'rejectCancel']);
+    
+    // Process Refund
+    Route::post('/orders/{id}/process-refund', [OrderController::class, 'processRefund']);
+    
+    // Vouchers
+    Route::apiResource('vouchers', VoucherController::class);
+    
+    // Test endpoint
+    Route::get('/orders/{id}/test-refund', [OrderController::class, 'testRefund']);
+    Route::get('/test-auth', function() {
+        $user = auth('sanctum')->user();
+        return response()->json([
+            'authenticated' => !!$user,
+            'user' => $user ? $user->only(['id', 'name', 'email']) : null,
+            'wallet_balance' => $user && $user->wallet ? $user->wallet->balance : 'No wallet'
+        ]);
+    });
+    
+    Route::post('/create-test-order', function() {
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+        
+        $order = App\Models\Order::create([
+            'user_id' => $user->id,
+            'total' => 150000,
+            'payment_method' => 'vnpay',
+            'payment_status_id' => 2,
+            'order_status_id' => 1,
+            'name' => $user->name,
+            'phone' => $user->phone ?? '0123456789',
+            'address' => $user->address ?? 'Test Address'
+        ]);
+        
+        return response()->json([
+            'message' => 'Tạo đơn hàng test thành công',
+            'order' => $order
+        ]);
+    });
 });
