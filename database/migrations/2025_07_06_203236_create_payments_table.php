@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     public function up()
-    {
+{
+    if (!Schema::hasTable('payments')) {
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('order_id');
@@ -17,10 +18,14 @@ return new class extends Migration
             $table->enum('status', ['pending', 'success', 'failed'])->default('pending');
             $table->json('response_data')->nullable();
             $table->timestamps();
-            
-            $table->foreign('order_id')->references('id')->on('orders')->onDelete('cascade');
+
+            $table->foreign('order_id')
+                  ->references('id')
+                  ->on('orders')
+                  ->onDelete('cascade');
         });
     }
+}
 
     public function down()
     {

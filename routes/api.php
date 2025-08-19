@@ -16,6 +16,9 @@ use App\Http\Controllers\API\{
     CartController,
     OrderController,
     BannerController,
+    ChatController,
+    ChatUserController,
+    ChatAdminController,
     UploadController,
     UserController,
     DashboardController,
@@ -235,3 +238,27 @@ Route::prefix('admin')->group(function () {
     Route::get('/cancel-requests', [OrderController::class, 'getCancelRequests']);
     Route::post('/orders/{id}/reject-cancel', [OrderController::class, 'rejectCancel']);
 });
+
+// routes/api.php
+
+
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    // User chat
+    Route::post('/chat/start',           [ChatUserController::class, 'start']);
+    Route::get('/chat/{chat}/messages',  [ChatUserController::class, 'messages']);
+    Route::post('/chat/{chat}/send',     [ChatUserController::class, 'send']);
+    Route::post('/chat/{chat}/read',     [ChatUserController::class, 'markRead']);
+
+    // Chatbot (user)
+    Route::post('/chat', [ChatController::class, 'chat']); // cái này AI chat
+
+    // Admin chat
+    Route::get('/admin/chats',               [ChatAdminController::class, 'listForAdmin']);
+    Route::post('/admin/chats/{chat}/claim', [ChatAdminController::class, 'claim']);
+    Route::post('/admin/chats/{chat}/send',  [ChatAdminController::class, 'send']);
+    Route::get('/admin/chats/{chat}/messages',[ChatAdminController::class, 'messages']);
+});
+
+

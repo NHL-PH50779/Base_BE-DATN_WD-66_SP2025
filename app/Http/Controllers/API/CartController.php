@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class CartController extends Controller
 {
@@ -93,7 +94,7 @@ class CartController extends Controller
                 'product_variant_id' => $request->product_variant_id,
             ],
             [
-                'quantity' => \DB::raw('quantity + ' . $request->quantity),
+                'quantity' => DB::raw('quantity + ' . $request->quantity),
                 'price' => $price
             ]
         );

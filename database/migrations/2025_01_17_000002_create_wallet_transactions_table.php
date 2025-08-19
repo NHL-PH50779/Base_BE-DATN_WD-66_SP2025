@@ -6,8 +6,9 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
-    {
+  public function up()
+{
+    if (!Schema::hasTable('wallet_transactions')) {
         Schema::create('wallet_transactions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('wallet_id');
@@ -21,6 +22,7 @@ return new class extends Migration
             $table->foreign('related_order_id')->references('id')->on('orders')->onDelete('set null');
         });
     }
+}
 
     public function down()
     {

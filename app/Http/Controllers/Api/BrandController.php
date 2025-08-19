@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class BrandController extends Controller
 {
@@ -114,7 +115,7 @@ class BrandController extends Controller
         }
 
         try {
-            \DB::beginTransaction();
+            DB::beginTransaction();
             
             // Tạo hoặc lấy thương hiệu "Không xác định"
             $unbranded = Brand::firstOrCreate(
@@ -123,19 +124,19 @@ class BrandController extends Controller
             );
 
             // Chuyển tất cả sản phẩm sang thương hiệu "Không xác định"
-            \DB::table('products')
+            DB::table('products')
                 ->where('brand_id', $id)
                 ->update(['brand_id' => $unbranded->id]);
 
             $brand->delete();
             
-            \DB::commit();
+            DB::commit();
 
             return response()->json([
                 'message' => 'Xóa thương hiệu thành công. Các sản phẩm đã được chuyển sang "Không xác định"'
             ]);
         } catch (\Exception $e) {
-            \DB::rollback();
+            DB::rollback();
             return response()->json([
                 'message' => 'Lỗi khi xóa thương hiệu: ' . $e->getMessage()
             ], 500);

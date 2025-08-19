@@ -6,12 +6,14 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
-    {
+  public function up()
+{
+    if (Schema::hasTable('orders') && !Schema::hasColumn('orders', 'cancel_reason')) {
         Schema::table('orders', function (Blueprint $table) {
             $table->text('cancel_reason')->nullable()->after('cancel_requested');
         });
     }
+}
 
     public function down()
     {

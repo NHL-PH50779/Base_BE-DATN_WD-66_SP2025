@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class CategoryController extends Controller
 {
@@ -114,7 +115,7 @@ class CategoryController extends Controller
         }
 
         try {
-            \DB::beginTransaction();
+            DB::beginTransaction();
             
             // Tạo hoặc lấy danh mục "Không xác định"
             $uncategorized = Category::firstOrCreate(
@@ -123,19 +124,19 @@ class CategoryController extends Controller
             );
 
             // Chuyển tất cả sản phẩm sang danh mục "Không xác định"
-            \DB::table('products')
+            DB::table('products')
                 ->where('category_id', $id)
                 ->update(['category_id' => $uncategorized->id]);
 
             $category->delete();
             
-            \DB::commit();
+            DB::commit();
 
             return response()->json([
                 'message' => 'Xóa danh mục thành công. Các sản phẩm đã được chuyển sang "Không xác định"'
             ]);
         } catch (\Exception $e) {
-            \DB::rollback();
+            DB::rollback();
             return response()->json([
                 'message' => 'Lỗi khi xóa danh mục: ' . $e->getMessage()
             ], 500);

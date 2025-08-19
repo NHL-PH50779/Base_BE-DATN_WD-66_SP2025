@@ -30,6 +30,9 @@ class Order extends Model
         'vnpay_response_code',
         'paid_at',
         'created_at',
+        'updated_at',
+        'total_price',
+
     ];
 
     protected $casts = [
