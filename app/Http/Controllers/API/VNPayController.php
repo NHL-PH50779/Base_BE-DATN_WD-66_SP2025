@@ -5,9 +5,11 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\FlashSaleItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class VNPayController extends Controller
 {
@@ -236,7 +238,7 @@ class VNPayController extends Controller
 
                 // Cập nhật đơn hàng nếu thanh toán thành công
                 if ($vnp_ResponseCode === '00') {
-                    // Trừ stock khi thanh toán thành công
+                    // Trừ stock và flash sale khi thanh toán thành công
                     foreach ($order->items as $item) {
                         if ($item->product_variant_id) {
                             $variant = \App\Models\ProductVariant::find($item->product_variant_id);
@@ -249,6 +251,13 @@ class VNPayController extends Controller
                                 $product->decrement('stock', $item->quantity);
                             }
                         }
+                        
+                        // Trừ số lượng flash sale
+                        $this->decrementFlashSaleQuantity($item->product_id, $item->quantity);
+                        
+                        // Clear cache ngay lập tức
+                        \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+                        \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$item->product_id}");
                     }
                     
                     $order->update([
@@ -391,7 +400,7 @@ class VNPayController extends Controller
                 ]);
 
                 if ($vnp_ResponseCode === '00') {
-                    // Trừ stock khi thanh toán thành công (IPN)
+                    // Trừ stock và flash sale khi thanh toán thành công (IPN)
                     foreach ($order->items as $item) {
                         if ($item->product_variant_id) {
                             $variant = \App\Models\ProductVariant::find($item->product_variant_id);
@@ -404,6 +413,13 @@ class VNPayController extends Controller
                                 $product->decrement('stock', $item->quantity);
                             }
                         }
+                        
+                        // Trừ số lượng flash sale
+                        $this->decrementFlashSaleQuantity($item->product_id, $item->quantity);
+                        
+                        // Clear cache ngay lập tức
+                        \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+                        \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$item->product_id}");
                     }
                     
                     // Cập nhật đơn hàng thành công
@@ -449,6 +465,40 @@ class VNPayController extends Controller
                 'request_data' => $request->all()
             ]);
             return response()->json(['RspCode' => '99', 'Message' => 'System error']);
+        }
+    }
+    
+    // Helper method để giảm số lượng flash sale
+    private function decrementFlashSaleQuantity($productId, $quantity)
+    {
+        $now = Carbon::now();
+        
+        // Tìm flash sale item đang active cho sản phẩm này
+        $flashSaleItem = FlashSaleItem::whereHas('flashSale', function ($query) use ($now) {
+            $query->where('is_active', true)
+                  ->where('start_time', '<=', $now)
+                  ->where('end_time', '>=', $now);
+        })
+        ->where('product_id', $productId)
+        ->where('is_active', true)
+        ->first();
+        
+        if ($flashSaleItem) {
+            // Kiểm tra còn đủ số lượng không
+            $remainingQuantity = $flashSaleItem->quantity_limit - $flashSaleItem->sold_quantity;
+            if ($remainingQuantity >= $quantity) {
+                $flashSaleItem->increment('sold_quantity', $quantity);
+                
+                // Clear cache
+                \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+                \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$productId}");
+                
+                Log::info('VNPay - Decremented flash sale quantity:', [
+                    'product_id' => $productId,
+                    'quantity' => $quantity,
+                    'new_sold_quantity' => $flashSaleItem->fresh()->sold_quantity
+                ]);
+            }
         }
     }
 }

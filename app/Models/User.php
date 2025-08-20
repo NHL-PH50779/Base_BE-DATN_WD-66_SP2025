@@ -56,6 +56,16 @@ class User extends Authenticatable
     {
         return $this->hasOne(Wallet::class);
     }
+    
+    public function withdrawRequests()
+    {
+        return $this->hasMany(WithdrawRequest::class);
+    }
+    
+    public function returnRequests()
+    {
+        return $this->hasMany(ReturnRequest::class);
+    }
 
     // Auto create wallet when user created
     protected static function boot()

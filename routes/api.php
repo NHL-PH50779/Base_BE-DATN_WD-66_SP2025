@@ -25,7 +25,8 @@ use App\Http\Controllers\API\{
     WishlistController,
     FlashSaleController,
     FlashSalePurchaseController,
-    PaymentController
+    PaymentController,
+    WithdrawRequestController
 };
 
 // ✅ Public Routes (Không cần đăng nhập)
@@ -139,14 +140,69 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/wallet/deposit', [\App\Http\Controllers\API\WalletController::class, 'deposit']);
     Route::post('/wallet/withdraw', [\App\Http\Controllers\API\WalletController::class, 'withdraw']);
 
-    // Return requests
-    Route::apiResource('return_requests', ReturnRequestController::class);
-    Route::apiResource('refunds', RefundController::class);
+    // Return requests và Withdraw requests
+    Route::apiResource('return-requests', ReturnRequestController::class);
+    Route::post('return-requests/{id}/approve', [ReturnRequestController::class, 'approve']);
+    Route::post('return-requests/{id}/reject', [ReturnRequestController::class, 'reject']);
+    
+    Route::apiResource('withdraw-requests', WithdrawRequestController::class);
+    Route::post('withdraw-requests/{id}/approve', [WithdrawRequestController::class, 'approve']);
+    Route::post('withdraw-requests/{id}/reject', [WithdrawRequestController::class, 'reject']);
 });
 
 // ✅ Admin Routes
 Route::get('/test', function () {
     return response()->json(['message' => 'API working', 'time' => now()]);
+});
+
+// Test routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/test/vnpay-refund/{orderId}', [\App\Http\Controllers\API\TestController::class, 'testVNPayRefund']);
+    Route::get('/test/withdraw-request', [\App\Http\Controllers\API\TestController::class, 'testWithdrawRequest']);
+});
+
+// Test withdraw endpoint (no auth)
+Route::get('/test/withdraw-table', function() {
+    try {
+        $count = \App\Models\WithdrawRequest::count();
+        return response()->json([
+            'message' => 'Withdraw requests table exists',
+            'count' => $count,
+            'table_exists' => true
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Error accessing withdraw requests table',
+            'error' => $e->getMessage(),
+            'table_exists' => false
+        ], 500);
+    }
+});
+
+// Debug wallet endpoint
+Route::get('/debug/wallet/{email}', function($email) {
+    try {
+        $user = \App\Models\User::where('email', $email)->first();
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+        
+        $wallet = $user->wallet;
+        if (!$wallet) {
+            $wallet = $user->wallet()->create(['balance' => 0]);
+        }
+        
+        return response()->json([
+            'user' => $user->only(['id', 'name', 'email']),
+            'wallet' => [
+                'balance' => $wallet->balance,
+                'formatted_balance' => number_format($wallet->balance, 0, ',', '.') . ' VND'
+            ],
+            'transactions_count' => $wallet->transactions()->count()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
 });
 
 // Test mail endpoint
@@ -302,9 +358,16 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
     });
     
-    // Return Requests & Refunds
-    Route::apiResource('return-requests', ReturnRequestController::class);
-    Route::apiResource('refunds', RefundController::class);
+    // Return Requests & Withdraw Requests (Admin)
+    Route::get('/return-requests', [ReturnRequestController::class, 'index']);
+    Route::get('/return-requests/{id}', [ReturnRequestController::class, 'show']);
+    Route::post('/return-requests/{id}/approve', [ReturnRequestController::class, 'approve']);
+    Route::post('/return-requests/{id}/reject', [ReturnRequestController::class, 'reject']);
+    
+    Route::get('/withdraw-requests', [WithdrawRequestController::class, 'index']);
+    Route::get('/withdraw-requests/{id}', [WithdrawRequestController::class, 'show']);
+    Route::post('/withdraw-requests/{id}/approve', [WithdrawRequestController::class, 'approve']);
+    Route::post('/withdraw-requests/{id}/reject', [WithdrawRequestController::class, 'reject']);
     
     // Cancel Requests
     Route::get('/cancel-requests', [OrderController::class, 'getCancelRequests']);

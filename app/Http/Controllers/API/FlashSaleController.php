@@ -13,11 +13,26 @@ use Carbon\Carbon;
 class FlashSaleController extends Controller
 {
     // Lấy flash sale hiện tại
-    public function current()
+    public function current(Request $request)
     {
-        // Giảm độ phức tạp của query và tăng thời gian cache
-        $flashSale = Cache::remember('current_flash_sale', 300, function () {
-            return FlashSale::with(['activeItems' => function($q) {
+        // Kiểm tra nếu có yêu cầu refresh thì không dùng cache
+        $useCache = !$request->has('refresh') || $request->get('refresh') !== '1';
+        
+        if ($useCache) {
+            // Giảm độ phức tạp của query và tăng thời gian cache
+            $flashSale = Cache::remember('current_flash_sale', 300, function () {
+                return FlashSale::with(['activeItems' => function($q) {
+                        $q->with(['product' => function($q) {
+                            $q->select('id', 'name', 'thumbnail', 'brand_id', 'category_id');
+                        }]);
+                    }])
+                    ->active()
+                    ->current()
+                    ->first();
+            });
+        } else {
+            // Không dùng cache, lấy dữ liệu mới nhất
+            $flashSale = FlashSale::with(['activeItems' => function($q) {
                     $q->with(['product' => function($q) {
                         $q->select('id', 'name', 'thumbnail', 'brand_id', 'category_id');
                     }]);
@@ -25,7 +40,7 @@ class FlashSaleController extends Controller
                 ->active()
                 ->current()
                 ->first();
-        });
+        }
 
         if (!$flashSale) {
             return response()->json([

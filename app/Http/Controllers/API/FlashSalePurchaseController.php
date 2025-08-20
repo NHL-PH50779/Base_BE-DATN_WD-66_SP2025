@@ -56,12 +56,11 @@ class FlashSalePurchaseController extends Controller
                 ], 400);
             }
 
-            // Cập nhật số lượng đã bán
-            $flashSaleItem->increment('sold_quantity', $request->quantity);
+            // Không cập nhật sold_quantity ở đây, sẽ cập nhật khi đơn hàng thành công
             
-            // Clear cache để cập nhật dữ liệu mới
-            \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
-            \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$flashSaleItem->product_id}");
+            // Clear cache để cập nhật dữ liệu mới - không cần thiết vì không thay đổi gì
+            // \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+            // \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$flashSaleItem->product_id}");
 
             // Tính tổng tiền theo giá flash sale
             $totalPrice = $flashSaleItem->sale_price * $request->quantity;

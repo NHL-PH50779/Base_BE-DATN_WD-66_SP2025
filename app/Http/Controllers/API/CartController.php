@@ -169,19 +169,8 @@ class CartController extends Controller
             ], 500);
         }
         
-        // Cập nhật Flash Sale sold_quantity nếu là Flash Sale
-        if ($isFlashSalePurchase) {
-            $success = $flashSaleItem->incrementSoldQuantity($request->quantity);
-            if (!$success) {
-                // Rollback cart item nếu Flash Sale hết hàng
-                $item->delete();
-                return response()->json([
-                    'message' => 'Sản phẩm Flash Sale đã hết hàng'
-                ], 400);
-            }
-            // Clear cache để cập nhật dữ liệu Flash Sale
-            \Cache::forget('current_flash_sale');
-        }
+        // Không cập nhật Flash Sale sold_quantity khi thêm vào giỏ hàng
+        // Sẽ cập nhật khi thanh toán thành công
         // Không kiểm tra stock cho sản phẩm thường khi thêm vào giỏ hàng
         // Chỉ kiểm tra khi checkout
 
@@ -242,22 +231,8 @@ class CartController extends Controller
         $cart = Cart::where('user_id', $user->id)->firstOrFail();
         $item = CartItem::where('cart_id', $cart->id)->findOrFail($id);
         
-        // Kiểm tra nếu là Flash Sale item thì giảm sold_quantity
-        $flashSaleItem = FlashSaleItem::where('product_id', $item->product_id)
-            ->whereHas('flashSale', function($q) {
-                $q->where('is_active', true)
-                  ->where('start_time', '<=', now())
-                  ->where('end_time', '>=', now());
-            })
-            ->where('is_active', true)
-            ->first();
-            
-        if ($flashSaleItem && $item->price == $flashSaleItem->sale_price) {
-            // Giảm sold_quantity
-            $flashSaleItem->decrementSoldQuantity($item->quantity);
-            // Clear cache
-            \Cache::forget('current_flash_sale');
-        }
+        // Không giảm sold_quantity khi xóa khỏi giỏ hàng
+        // Vì chưa thực sự mua
         
         $item->delete();
 

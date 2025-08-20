@@ -15,6 +15,8 @@ use App\Models\WalletTransaction;
 use App\Models\ReturnRequest;
 use App\Mail\OrderStatusMail;
 use Illuminate\Support\Facades\Mail;
+use App\Models\FlashSaleItem;
+use Carbon\Carbon;
 class OrderController extends Controller
 {
     public function checkout(Request $request)
@@ -197,7 +199,7 @@ try {
                         'price' => $cartItem->price
                     ]);
                     
-                    // Chỉ trừ stock cho COD, VNPay sẽ trừ khi thanh toán thành công
+                    // Chỉ trừ stock và flash sale cho COD, VNPay sẽ trừ khi thanh toán thành công
                     if ($request->payment_method === 'cod') {
                         if ($cartItem->product_variant_id) {
                             // Trừ stock của variant
@@ -212,6 +214,13 @@ try {
                                 $product->decrement('stock', $cartItem->quantity);
                             }
                         }
+                        
+                        // Trừ số lượng flash sale nếu là sản phẩm flash sale
+                        $this->decrementFlashSaleQuantity($cartItem->product_id, $cartItem->quantity);
+                        
+                        // Clear cache ngay lập tức
+                        \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+                        \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$cartItem->product_id}");
                     }
                 }
             } else if ($request->items) {
@@ -1008,6 +1017,40 @@ public function testRefund(Request $request, $id)
             ->where('reference_type', 'order')
             ->get()
     ]);
+}
+
+// Helper method để giảm số lượng flash sale
+private function decrementFlashSaleQuantity($productId, $quantity)
+{
+    $now = Carbon::now();
+    
+    // Tìm flash sale item đang active cho sản phẩm này
+    $flashSaleItem = FlashSaleItem::whereHas('flashSale', function ($query) use ($now) {
+        $query->where('is_active', true)
+              ->where('start_time', '<=', $now)
+              ->where('end_time', '>=', $now);
+    })
+    ->where('product_id', $productId)
+    ->where('is_active', true)
+    ->first();
+    
+    if ($flashSaleItem) {
+        // Kiểm tra còn đủ số lượng không
+        $remainingQuantity = $flashSaleItem->quantity_limit - $flashSaleItem->sold_quantity;
+        if ($remainingQuantity >= $quantity) {
+            $flashSaleItem->increment('sold_quantity', $quantity);
+            
+            // Clear cache
+            \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+            \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$productId}");
+            
+            \Log::info('Decremented flash sale quantity:', [
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'new_sold_quantity' => $flashSaleItem->fresh()->sold_quantity
+            ]);
+        }
+    }
 }
 
 }
