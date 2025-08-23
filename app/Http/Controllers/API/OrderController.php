@@ -96,7 +96,7 @@ try {
             'email' => 'nullable|email|max:255',
             'address' => 'required|string',
             'note' => 'nullable|string',
-            'payment_method' => 'required|in:cod,vnpay',
+            'payment_method' => 'required|in:cod,vnpay,wallet',
             'total' => 'required|numeric|min:0',
             'coupon_code' => 'nullable|string',
             'coupon_discount' => 'nullable|numeric|min:0',
@@ -167,6 +167,26 @@ try {
             }
         }
 
+        // Kiểm tra wallet balance nếu thanh toán bằng ví
+        if ($request->payment_method === 'wallet') {
+            if (!$user->id) {
+                return response()->json(['message' => 'Vui lòng đăng nhập để thanh toán bằng ví'], 401);
+            }
+            
+            $wallet = $user->wallet;
+            if (!$wallet) {
+                $wallet = $user->wallet()->create(['balance' => 0]);
+            }
+            
+            if ($wallet->balance < $request->total) {
+                return response()->json([
+                    'message' => 'Số dư ví không đủ để thanh toán',
+                    'current_balance' => $wallet->balance,
+                    'required_amount' => $request->total
+                ], 400);
+            }
+        }
+
         DB::beginTransaction();
         try {
             // Tạo đơn hàng
@@ -182,9 +202,9 @@ try {
                 'coupon_code' => $request->coupon_code,
                 'coupon_discount' => $request->coupon_discount ?? 0,
                 'order_status_id' => Order::STATUS_PENDING,
-                'payment_status_id' => Order::PAYMENT_PENDING,
+                'payment_status_id' => $request->payment_method === 'wallet' ? Order::PAYMENT_PAID : Order::PAYMENT_PENDING,
                 'status' => 'pending',
-                'payment_status' => 'unpaid'
+                'payment_status' => $request->payment_method === 'wallet' ? 'paid' : 'unpaid'
             ]);
 
             // Tạo order items và trừ tồn kho
@@ -199,8 +219,8 @@ try {
                         'price' => $cartItem->price
                     ]);
                     
-                    // Chỉ trừ stock và flash sale cho COD, VNPay sẽ trừ khi thanh toán thành công
-                    if ($request->payment_method === 'cod') {
+                    // Trừ stock và flash sale cho COD và Wallet, VNPay sẽ trừ khi thanh toán thành công
+                    if (in_array($request->payment_method, ['cod', 'wallet'])) {
                         if ($cartItem->product_variant_id) {
                             // Trừ stock của variant
                             $variant = ProductVariant::find($cartItem->product_variant_id);
@@ -235,6 +255,26 @@ try {
                         'price' => $item['price']
                     ]);
                 }
+            }
+
+            // Xử lý thanh toán bằng ví
+            if ($request->payment_method === 'wallet' && $user->id) {
+                $wallet = $user->wallet;
+                
+                // Trừ tiền từ ví
+                $wallet->subtractMoney(
+                    $request->total,
+                    'Thanh toán đơn hàng #' . $order->id,
+                    'order',
+                    $order->id
+                );
+                
+                \Log::info('Wallet payment processed:', [
+                    'order_id' => $order->id,
+                    'amount' => $request->total,
+                    'user_id' => $user->id,
+                    'new_balance' => $wallet->fresh()->balance
+                ]);
             }
 
             // Xóa các items đã đặt hàng khỏi giỏ hàng

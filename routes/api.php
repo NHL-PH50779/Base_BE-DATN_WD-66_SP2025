@@ -413,3 +413,229 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         ]);
     });
 });
+
+// Chat routes
+use App\Http\Controllers\API\ChatController;
+use App\Http\Controllers\API\ChatUserController;
+use App\Http\Controllers\API\ChatAdminController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    // AI Chatbot
+    Route::post('/chat', [ChatController::class, 'chat']);
+    
+    // User chat with admin
+    Route::post('/chat/start', function() {
+        try {
+            $user = auth('sanctum')->user();
+            
+            // Tìm hoặc tạo chat
+            $chat = DB::table('chats')->where('user_id', $user->id)->first();
+            
+            if (!$chat) {
+                $chatId = DB::table('chats')->insertGetId([
+                    'user_id' => $user->id,
+                    'admin_id' => null,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+                
+                $chat = (object)[
+                    'id' => $chatId,
+                    'user_id' => $user->id,
+                    'admin_id' => null
+                ];
+            }
+            
+            return response()->json([
+                'data' => [
+                    'id' => $chat->id,
+                    'user_id' => $chat->user_id,
+                    'admin_id' => $chat->admin_id,
+                    'admin' => $chat->admin_id ? ['id' => $chat->admin_id] : null
+                ]
+            ]);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    Route::get('/chat/{chat}/messages', [ChatUserController::class, 'messages']);
+    Route::post('/chat/{chat}/send', function($chat) {
+        try {
+            $user = auth('sanctum')->user();
+            $message = request('message');
+            
+            // Kiểm tra chat có tồn tại không
+            $chatExists = DB::table('chats')->where('id', $chat)->where('user_id', $user->id)->exists();
+            if (!$chatExists) {
+                return response()->json(['error' => 'Chat not found'], 404);
+            }
+            
+            // Thêm tin nhắn mới
+            $msgId = DB::table('chat_messages')->insertGetId([
+                'chat_id' => $chat,
+                'sender_id' => $user->id,
+                'message' => $message,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            // Cập nhật thời gian của chat
+            DB::table('chats')->where('id', $chat)->update(['updated_at' => now()]);
+            
+            return response()->json([
+                'data' => [
+                    'id' => $msgId,
+                    'sender_id' => $user->id,
+                    'message' => $message,
+                    'created_at' => now()->toISOString(),
+                    'sender' => ['id' => $user->id, 'name' => $user->name]
+                ]
+            ], 201);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    Route::post('/chat/{chat}/read', [ChatUserController::class, 'markRead']);
+    
+    // Admin chat management - Simple endpoints
+    Route::get('/admin/chats', function() {
+        try {
+            $chats = DB::table('chats')
+                ->join('users', 'chats.user_id', '=', 'users.id')
+                ->leftJoin('users as admins', 'chats.admin_id', '=', 'admins.id')
+                ->leftJoin(DB::raw('(SELECT chat_id, COUNT(*) as messages_count FROM chat_messages GROUP BY chat_id) as msg_counts'), 'chats.id', '=', 'msg_counts.chat_id')
+                ->select(
+                    'chats.id',
+                    'chats.user_id', 
+                    'chats.admin_id',
+                    'chats.updated_at',
+                    'users.name as user_name',
+                    'users.email as user_email',
+                    'admins.name as admin_name',
+                    DB::raw('COALESCE(msg_counts.messages_count, 0) as messages_count')
+                )
+                ->orderBy('chats.updated_at', 'desc')
+                ->get();
+                
+            $formatted = $chats->map(function($chat) {
+                return [
+                    'id' => $chat->id,
+                    'user' => [
+                        'id' => $chat->user_id,
+                        'name' => $chat->user_name,
+                        'email' => $chat->user_email
+                    ],
+                    'admin' => $chat->admin_id ? [
+                        'id' => $chat->admin_id,
+                        'name' => $chat->admin_name
+                    ] : null,
+                    'messages_count' => (int)$chat->messages_count,
+                    'updated_at' => $chat->updated_at
+                ];
+            });
+            
+            return response()->json(['data' => $formatted]);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    
+    Route::post('/admin/chats/{id}/claim', function($id) {
+        try {
+            $user = auth('sanctum')->user();
+            DB::table('chats')->where('id', $id)->update(['admin_id' => $user->id]);
+            
+            $chat = DB::table('chats')
+                ->join('users', 'chats.user_id', '=', 'users.id')
+                ->leftJoin('users as admins', 'chats.admin_id', '=', 'admins.id')
+                ->where('chats.id', $id)
+                ->select(
+                    'chats.id',
+                    'chats.user_id',
+                    'chats.admin_id', 
+                    'users.name as user_name',
+                    'admins.name as admin_name'
+                )
+                ->first();
+                
+            return response()->json([
+                'data' => [
+                    'id' => $chat->id,
+                    'user' => ['id' => $chat->user_id, 'name' => $chat->user_name],
+                    'admin' => ['id' => $chat->admin_id, 'name' => $chat->admin_name]
+                ]
+            ]);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    
+    Route::get('/admin/chats/{id}/messages', function($id) {
+        try {
+            $messages = DB::table('chat_messages')
+                ->join('users', 'chat_messages.sender_id', '=', 'users.id')
+                ->where('chat_messages.chat_id', $id)
+                ->select(
+                    'chat_messages.id',
+                    'chat_messages.sender_id',
+                    'chat_messages.message',
+                    'chat_messages.created_at',
+                    'users.name as sender_name'
+                )
+                ->orderBy('chat_messages.id')
+                ->get();
+                
+            $formatted = $messages->map(function($msg) {
+                return [
+                    'id' => $msg->id,
+                    'sender_id' => $msg->sender_id,
+                    'message' => $msg->message,
+                    'created_at' => $msg->created_at,
+                    'sender' => [
+                        'id' => $msg->sender_id,
+                        'name' => $msg->sender_name
+                    ]
+                ];
+            });
+            
+            return response()->json(['data' => $formatted]);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    
+    Route::post('/admin/chats/{id}/send', function($id) {
+        try {
+            $user = auth('sanctum')->user();
+            $message = request('message');
+            
+            // Thêm tin nhắn mới
+            $msgId = DB::table('chat_messages')->insertGetId([
+                'chat_id' => $id,
+                'sender_id' => $user->id,
+                'message' => $message,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            // Cập nhật thời gian của chat
+            DB::table('chats')->where('id', $id)->update(['updated_at' => now()]);
+            
+            return response()->json([
+                'data' => [
+                    'id' => $msgId,
+                    'sender_id' => $user->id,
+                    'message' => $message,
+                    'created_at' => now()->toISOString(),
+                    'sender' => ['id' => $user->id, 'name' => $user->name]
+                ]
+            ], 201);
+        } catch (Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    });
+    
+    Route::post('/admin/chats/{id}/read', function($id) {
+        return response()->json(['message' => 'ok']);
+    });
+});

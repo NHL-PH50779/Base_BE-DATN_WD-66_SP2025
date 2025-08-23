@@ -121,16 +121,67 @@ class WalletController extends Controller
     public function deposit(Request $request)
     {
         $request->validate([
-            'amount' => 'required|numeric|min:10000',
-            'payment_method' => 'required|in:vnpay,momo,bank'
+            'amount' => 'required|numeric|min:10000'
         ]);
 
-        // Logic nạp tiền - tích hợp với cổng thanh toán
-        return response()->json([
-            'success' => true,
-            'message' => 'Yêu cầu nạp tiền đã được tạo',
-            'payment_url' => 'https://payment-gateway.com/...' // URL thanh toán
-        ]);
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                \Log::error('Wallet deposit: User not authenticated');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Vui lòng đăng nhập'
+                ], 401);
+            }
+
+            \Log::info('Wallet deposit request', [
+                'user_id' => $user->id,
+                'amount' => $request->amount
+            ]);
+
+            // Tạo URL thanh toán VNPay cho nạp tiền
+            $vnpayController = new \App\Http\Controllers\API\VNPayController();
+            
+            // Tạo request giả lập cho VNPay
+            $vnpayRequest = new \Illuminate\Http\Request();
+            $vnpayRequest->merge([
+                'amount' => $request->amount,
+                'order_desc' => 'Nạp tiền vào ví - User ID: ' . $user->id,
+                'wallet_deposit' => true,
+                'user_id' => $user->id
+            ]);
+            
+            // Set IP address
+            $vnpayRequest->server->set('REMOTE_ADDR', request()->ip());
+            
+            $vnpayResponse = $vnpayController->createPayment($vnpayRequest);
+            $responseData = $vnpayResponse->getData(true);
+            
+            \Log::info('VNPay response for wallet deposit', $responseData);
+            
+            if ($responseData['success']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Tạo liên kết thanh toán thành công',
+                    'payment_url' => $responseData['payment_url']
+                ]);
+            } else {
+                \Log::error('VNPay failed to create payment URL', $responseData);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể tạo liên kết thanh toán: ' . ($responseData['message'] ?? 'Unknown error')
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Wallet deposit error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi tạo yêu cầu nạp tiền: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function withdraw(Request $request)

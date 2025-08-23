@@ -30,34 +30,55 @@ class VNPayController extends Controller
     public function createPayment(Request $request)
     {
         try {
-            $request->validate([
-                'order_id' => 'required|integer|exists:orders,id',
-                'amount' => 'required|numeric|min:1000|max:1000000000',
-                'order_desc' => 'nullable|string|max:255',
-            ]);
+            // Validation khác nhau cho wallet deposit và order payment
+            if ($request->has('wallet_deposit') && $request->wallet_deposit) {
+                $request->validate([
+                    'amount' => 'required|numeric|min:10000|max:1000000000',
+                    'order_desc' => 'nullable|string|max:255',
+                    'user_id' => 'required|integer|exists:users,id'
+                ]);
+            } else {
+                $request->validate([
+                    'order_id' => 'required|integer|exists:orders,id',
+                    'amount' => 'required|numeric|min:1000|max:1000000000',
+                    'order_desc' => 'nullable|string|max:255',
+                ]);
+            }
 
-            $orderId = $request->order_id;
             $amount = $request->amount;
-            $orderDesc = $request->order_desc ?? "Thanh toan don hang #{$orderId}";
+            
+            if ($request->has('wallet_deposit') && $request->wallet_deposit) {
+                // Xử lý wallet deposit
+                $userId = $request->user_id;
+                $orderDesc = $request->order_desc ?? "Nạp tiền vào ví - User ID: {$userId}";
+                
+                // Tạo mã giao dịch cho wallet deposit
+                $vnp_TxnRef = 'WALLET_' . $userId . '_' . time() . '_' . rand(1000, 9999);
+                $orderId = null; // Không có order_id cho wallet deposit
+            } else {
+                // Xử lý order payment
+                $orderId = $request->order_id;
+                $orderDesc = $request->order_desc ?? "Thanh toan don hang #{$orderId}";
 
-            // Kiểm tra đơn hàng tồn tại và chưa thanh toán
-            $order = Order::find($orderId);
-            if (!$order) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Đơn hàng không tồn tại'
-                ], 404);
+                // Kiểm tra đơn hàng tồn tại và chưa thanh toán
+                $order = Order::find($orderId);
+                if (!$order) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Đơn hàng không tồn tại'
+                    ], 404);
+                }
+
+                if ($order->payment_status_id == Order::PAYMENT_PAID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Đơn hàng đã được thanh toán'
+                    ], 400);
+                }
+
+                // Tạo mã giao dịch cho order
+                $vnp_TxnRef = $orderId . '_' . time() . '_' . rand(1000, 9999);
             }
-
-            if ($order->payment_status_id == Order::PAYMENT_PAID) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Đơn hàng đã được thanh toán'
-                ], 400);
-            }
-
-            // Tạo mã giao dịch duy nhất
-            $vnp_TxnRef = $orderId . '_' . time() . '_' . rand(1000, 9999);
             
             // Kiểm tra trùng lặp transaction
             $existingPayment = Payment::where('vnp_txn_ref', $vnp_TxnRef)->first();
@@ -93,11 +114,13 @@ class VNPayController extends Controller
             $vnpSecureHash = hash_hmac('sha512', $hashdata, $this->vnp_HashSecret);
             $vnpUrl = $this->vnp_Url . "?" . $query . '&vnp_SecureHash=' . $vnpSecureHash;
 
-            // Cập nhật đơn hàng với thông tin VNPay
-            $order->update([
-                'payment_method' => 'vnpay',
-                'vnpay_txn_ref' => $vnp_TxnRef
-            ]);
+            // Cập nhật thông tin VNPay (chỉ cho order payment)
+            if ($orderId && isset($order)) {
+                $order->update([
+                    'payment_method' => 'vnpay',
+                    'vnpay_txn_ref' => $vnp_TxnRef
+                ]);
+            }
 
             Log::info('VNPay payment URL created', [
                 'order_id' => $orderId,
@@ -184,26 +207,77 @@ class VNPayController extends Controller
                 ], 400);
             }
 
-            // Lấy order_id từ vnp_TxnRef
-            $orderIdParts = explode('_', $vnp_TxnRef);
-            $orderId = $orderIdParts[0] ?? 0;
+            // Kiểm tra loại giao dịch (wallet deposit hay order payment)
+            $isWalletDeposit = strpos($vnp_TxnRef, 'WALLET_') === 0;
             
-            if (!$orderId) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Mã đơn hàng không hợp lệ'
-                ], 400);
+            if ($isWalletDeposit) {
+                // Xử lý wallet deposit
+                $parts = explode('_', $vnp_TxnRef);
+                $userId = $parts[1] ?? 0;
+                
+                if (!$userId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Mã người dùng không hợp lệ'
+                    ], 400);
+                }
+                
+                $user = \App\Models\User::find($userId);
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Không tìm thấy người dùng'
+                    ], 404);
+                }
+                
+                // Xử lý nạp tiền vào ví
+                if ($vnp_ResponseCode === '00') {
+                    $wallet = $user->wallet;
+                    if (!$wallet) {
+                        $wallet = $user->wallet()->create(['balance' => 0]);
+                    }
+                    
+                    // Sử dụng method addMoney của Wallet model
+                    $wallet->addMoney(
+                        $vnp_Amount,
+                        'Nạp tiền qua VNPay - ' . $vnp_TransactionNo,
+                        'vnpay_deposit',
+                        $vnp_TransactionNo
+                    );
+                    
+                    Log::info('Wallet deposit success', [
+                        'user_id' => $userId,
+                        'amount' => $vnp_Amount,
+                        'new_balance' => $wallet->fresh()->balance
+                    ]);
+                }
+                
+                $orderId = null;
+                $order = null;
+            } else {
+                // Xử lý order payment
+                $orderIdParts = explode('_', $vnp_TxnRef);
+                $orderId = $orderIdParts[0] ?? 0;
+                
+                if (!$orderId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Mã đơn hàng không hợp lệ'
+                    ], 400);
+                }
+                
+                // Kiểm tra order có tồn tại không
+                $order = Order::find($orderId);
+                if (!$order) {
+                    Log::error('Order not found for VNPay return', ['order_id' => $orderId, 'txn_ref' => $vnp_TxnRef]);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Không tìm thấy đơn hàng'
+                    ], 404);
+                }
             }
 
-            // Kiểm tra order có tồn tại không
-            $order = Order::find($orderId);
-            if (!$order) {
-                Log::error('Order not found for VNPay return', ['order_id' => $orderId, 'txn_ref' => $vnp_TxnRef]);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Không tìm thấy đơn hàng'
-                ], 404);
-            }
+
 
             // Kiểm tra xem payment đã tồn tại chưa (tránh duplicate)
             $existingPayment = Payment::where('vnp_txn_ref', $vnp_TxnRef)->first();
@@ -238,37 +312,39 @@ class VNPayController extends Controller
 
                 // Cập nhật đơn hàng nếu thanh toán thành công
                 if ($vnp_ResponseCode === '00') {
-                    // Trừ stock và flash sale khi thanh toán thành công
-                    foreach ($order->items as $item) {
-                        if ($item->product_variant_id) {
-                            $variant = \App\Models\ProductVariant::find($item->product_variant_id);
-                            if ($variant && $variant->stock >= $item->quantity) {
-                                $variant->decrement('stock', $item->quantity);
+                    if ($order) {
+                        // Trừ stock và flash sale khi thanh toán thành công
+                        foreach ($order->items as $item) {
+                            if ($item->product_variant_id) {
+                                $variant = \App\Models\ProductVariant::find($item->product_variant_id);
+                                if ($variant && $variant->stock >= $item->quantity) {
+                                    $variant->decrement('stock', $item->quantity);
+                                }
+                            } else {
+                                $product = \App\Models\Product::find($item->product_id);
+                                if ($product && isset($product->stock) && $product->stock >= $item->quantity) {
+                                    $product->decrement('stock', $item->quantity);
+                                }
                             }
-                        } else {
-                            $product = \App\Models\Product::find($item->product_id);
-                            if ($product && isset($product->stock) && $product->stock >= $item->quantity) {
-                                $product->decrement('stock', $item->quantity);
-                            }
+                            
+                            // Trừ số lượng flash sale
+                            $this->decrementFlashSaleQuantity($item->product_id, $item->quantity);
+                            
+                            // Clear cache ngay lập tức
+                            \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
+                            \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$item->product_id}");
                         }
                         
-                        // Trừ số lượng flash sale
-                        $this->decrementFlashSaleQuantity($item->product_id, $item->quantity);
-                        
-                        // Clear cache ngay lập tức
-                        \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
-                        \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$item->product_id}");
+                        $order->update([
+                            'payment_status' => 'paid',
+                            'payment_status_id' => Order::PAYMENT_PAID,
+                            'status' => 'confirmed',
+                            'order_status_id' => Order::STATUS_CONFIRMED,
+                            'vnpay_transaction_no' => $vnp_TransactionNo,
+                            'vnpay_response_code' => $vnp_ResponseCode,
+                            'paid_at' => now()
+                        ]);
                     }
-                    
-                    $order->update([
-                        'payment_status' => 'paid',
-                        'payment_status_id' => Order::PAYMENT_PAID,
-                        'status' => 'confirmed',
-                        'order_status_id' => Order::STATUS_CONFIRMED,
-                        'vnpay_transaction_no' => $vnp_TransactionNo,
-                        'vnpay_response_code' => $vnp_ResponseCode,
-                        'paid_at' => now()
-                    ]);
 
                     DB::commit();
 
@@ -276,15 +352,17 @@ class VNPayController extends Controller
                         'order_id' => $orderId,
                         'amount' => $vnp_Amount,
                         'transaction_id' => $vnp_TransactionNo,
-                        'response_code' => $vnp_ResponseCode
+                        'response_code' => $vnp_ResponseCode,
+                        'is_wallet_deposit' => $isWalletDeposit
                     ]);
 
                     return response()->json([
                         'success' => true,
-                        'message' => 'Thanh toán thành công',
+                        'message' => $isWalletDeposit ? 'Nạp tiền vào ví thành công' : 'Thanh toán thành công',
                         'order_id' => $orderId,
                         'amount' => $vnp_Amount,
-                        'transaction_id' => $vnp_TransactionNo
+                        'transaction_id' => $vnp_TransactionNo,
+                        'type' => $isWalletDeposit ? 'wallet_deposit' : 'order_payment'
                     ]);
                 } else {
                     DB::commit();

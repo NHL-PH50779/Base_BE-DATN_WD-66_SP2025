@@ -1,0 +1,4 @@
+// Thêm vào cuối file routes/api.php:
+
+// Include chat routes
+require __DIR__.'/api-chat.php';
