@@ -25,42 +25,234 @@ class ChatController extends Controller
         $userMessage = $request->input('message');
         $apiUrl = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={$apiKey}";
 
-        // ===== XỬ LÝ SẢN PHẨM =====
-        $productsArr = collect();
+      // ===== XỬ LÝ SẢN PHẨM =====
+$productsArr = collect();
+$productsList = '';
+$responseFlag = "exact";
 
-        if (preg_match('/(\d+)\s?triệu\s?(?:-|đến|tới)\s?(\d+)\s?triệu/i', $userMessage, $matches)) {
-            $minPrice = (int) $matches[1] * 1000000;
-            $maxPrice = (int) $matches[2] * 1000000;
-            $productsArr = DB::table('products')
-                ->whereBetween('price', [$minPrice, $maxPrice])
-                ->whereNull('deleted_at')
-                ->where('is_active', 1)
-                ->select('id', 'name', 'price')
-                ->limit(10)
-                ->get();
-        } elseif (preg_match('/dưới\s?(\d+)\s?triệu/i', $userMessage, $matches)) {
-            $maxPrice = (int) $matches[1] * 1000000;
-            $productsArr = DB::table('products')
-                ->where('price', '<=', $maxPrice)
-                ->whereNull('deleted_at')
-                ->where('is_active', 1)
-                ->select('id', 'name', 'price')
-                ->limit(10)
-                ->get();
-        } elseif (preg_match('/trên\s?(\d+)\s?triệu/i', $userMessage, $matches)) {
-            $minPrice = (int) $matches[1] * 1000000;
-            $productsArr = DB::table('products')
-                ->where('price', '>=', $minPrice)
-                ->whereNull('deleted_at')
-                ->where('is_active', 1)
-                ->select('id', 'name', 'price')
-                ->limit(10)
-                ->get();
+// --- Trường hợp khách hỏi laptop theo brand ---
+if (preg_match('/laptop\s*(Apple|Dell|HP|Asus|Lenovo|Acer|HI|he)/i', $userMessage, $matches)) {
+    $brandName = $matches[1];
+
+    // Tìm brand theo tên
+    $brand = DB::table('brands')
+        ->where('name', 'like', '%' . $brandName . '%')
+        ->first();
+
+    if ($brand) {
+        $productsArr = DB::table('products')
+            ->where('brand_id', $brand->id)
+            ->whereNull('deleted_at')
+            ->where('is_active', 1)
+            ->select('id', 'name', 'price')
+            ->limit(10)
+            ->get();
+
+        if ($productsArr->isEmpty()) {
+            $productsList = "Hiện tại không có sản phẩm laptop thương hiệu {$brandName} phù hợp.";
         }
+    } else {
+        $productsList = "Hiện tại chưa có thương hiệu {$brandName} trong hệ thống.";
+    }
 
-        $productsList = '';
+// --- Trường hợp khách hỏi laptop chơi game hoặc gaming ---
+} elseif (preg_match('/laptop\s*(chơi game|gaming)/i', $userMessage)) {
+    // Tìm category "Laptop chơi game" hoặc "Laptop Gaming"
+    $category = DB::table('categories')
+        ->where(function($q) {
+            $q->where('name', 'like', '%chơi game%')
+              ->orWhere('name', 'like', '%gaming%');
+        })
+        ->first();
+
+    if ($category) {
+        $productsArr = DB::table('products')
+            ->where('category_id', $category->id)
+            ->whereNull('deleted_at')
+            ->where('is_active', 1)
+            ->select('id', 'name', 'price')
+            ->limit(10)
+            ->get();
+
+        if ($productsArr->isEmpty()) {
+            $productsList = "Hiện tại không có sản phẩm laptop chơi game phù hợp.";
+        }
+    } else {
+        $productsList = "Hiện tại chưa có danh mục laptop chơi game trong hệ thống.";
+    }
+
+// --- Trường hợp khách hỏi laptop theo category ---
+} elseif (preg_match('/laptop\s*(gaming|chơi game|đồ họa|học tập|sinh viên|văn phòng|kỹ thuật)/iu', $userMessage, $matches)) {
+    $keyword = strtolower($matches[1]);
+    $category = DB::table('categories')
+        ->where(function($q) use ($keyword) {
+            $q->where('name', 'like', "%$keyword%");
+        })
+        ->first();
+
+    if ($category) {
+        $productsArr = DB::table('products')
+            ->where('category_id', $category->id)
+            ->whereNull('deleted_at')
+            ->where('is_active', 1)
+            ->select('id', 'name', 'price')
+            ->limit(10)
+            ->get();
+
+        if ($productsArr->isEmpty()) {
+            $productsList = "Hiện tại không có sản phẩm laptop thuộc danh mục {$category->name} phù hợp.";
+        }
+    } else {
+        $productsList = "Hiện tại chưa có danh mục laptop {$keyword} trong hệ thống.";
+    }
+
+// --- Các trường hợp xử lý giá như cũ ---
+} elseif (preg_match('/(\d+)\s?(?:-|đến|tới)\s?(\d+)(\s?triệu|tr|k|\.000\.000)?/i', $userMessage, $matches)) {
+    $minInput = (int) $matches[1];
+    $maxInput = (int) $matches[2];
+
+    // Chuẩn hóa đơn vị
+    if (!empty($matches[3]) && preg_match('/triệu|tr/i', $matches[3])) {
+        $minPrice = $minInput * 1000000;
+        $maxPrice = $maxInput * 1000000;
+    } elseif (!empty($matches[3]) && preg_match('/k/i', $matches[3])) {
+        $minPrice = $minInput * 1000;
+        $maxPrice = $maxInput * 1000;
+    } elseif ($maxInput < 1000) {
+        $minPrice = $minInput * 1000000;
+        $maxPrice = $maxInput * 1000000;
+    } else {
+        $minPrice = $minInput;
+        $maxPrice = $maxInput;
+    }
+
+    $productsArr = DB::table('products')
+        ->whereBetween('price', [$minPrice, $maxPrice])
+        ->whereNull('deleted_at')
+        ->where('is_active', 1)
+        ->select('id', 'name', 'price')
+        ->limit(10)
+        ->get();
+
+    if ($productsArr->isEmpty()) {
+        // $responseFlag = "nearby";
+        // $productsArr = DB::table('products')
+        //     ->where('is_active', 1)
+        //     ->whereNull('deleted_at')
+        //     ->orderByRaw("ABS(price - ?)", [$maxPrice])
+        //     ->limit(3)
+        //     ->select('id', 'name', 'price')
+        //     ->get();
+           $productsList = "Hiện tại không có sản phẩm phù hợp với yêu cầu của bạn.";
+    }
+
+// --- Trường hợp "dưới X triệu" ---
+} elseif (preg_match('/dưới\s?(\d+)(\s?triệu|tr|k|\.000\.000)?/i', $userMessage, $matches)) {
+    $input = (int) $matches[1];
+    if (!empty($matches[2]) && preg_match('/triệu|tr/i', $matches[2])) {
+        $maxPrice = $input * 1000000;
+    } elseif (!empty($matches[2]) && preg_match('/k/i', $matches[2])) {
+        $maxPrice = $input * 1000;
+    } elseif ($input < 1000) {
+        $maxPrice = $input * 1000000;
+    } else {
+        $maxPrice = $input;
+    }
+
+    $productsArr = DB::table('products')
+        ->where('price', '<=', $maxPrice)
+        ->whereNull('deleted_at')
+        ->where('is_active', 1)
+        ->select('id', 'name', 'price')
+        ->limit(10)
+        ->get();
+
+    if ($productsArr->isEmpty()) {
+        // $responseFlag = "nearby";
+        // $productsArr = DB::table('products')
+        //     ->where('is_active', 1)
+        //     ->whereNull('deleted_at')
+        //     ->orderByRaw("ABS(price - ?)", [$maxPrice])
+        //     ->limit(3)
+        //     ->select('id', 'name', 'price')
+        //     ->get();
+         $productsList = "Hiện tại không có sản phẩm phù hợp với yêu cầu của bạn.";
+        
+    }
+
+// --- Trường hợp "trên X triệu" ---
+} elseif (preg_match('/trên\s?(\d+)(\s?triệu|tr|k|\.000\.000)?/i', $userMessage, $matches)) {
+    $input = (int) $matches[1];
+    if (!empty($matches[2]) && preg_match('/triệu|tr/i', $matches[2])) {
+        $minPrice = $input * 1000000;
+    } elseif (!empty($matches[2]) && preg_match('/k/i', $matches[2])) {
+        $minPrice = $input * 1000;
+    } elseif ($input < 1000) {
+        $minPrice = $input * 1000000;
+    } else {
+        $minPrice = $input;
+    }
+
+    $productsArr = DB::table('products')
+        ->where('price', '>=', $minPrice)
+        ->whereNull('deleted_at')
+        ->where('is_active', 1)
+        ->select('id', 'name', 'price')
+        ->limit(10)
+        ->get();
+
+    if ($productsArr->isEmpty()) {
+        // $responseFlag = "nearby";
+        // $productsArr = DB::table('products')
+        //     ->where('is_active', 1)
+        //     ->whereNull('deleted_at')
+        //     ->orderByRaw("ABS(price - ?)", [$minPrice])
+        //     ->limit(3)
+        //     ->select('id', 'name', 'price')
+        //     ->get();
+           $productsList = "Hiện tại không có sản phẩm phù hợp với yêu cầu của bạn.";
+    }
+
+// --- Trường hợp chỉ nhập 1 số: "15tr", "15 triệu", "15000000" ---
+} elseif (preg_match('/(\d+)(\s?triệu|tr|k|\.000\.000)?/i', $userMessage, $matches)) {
+    $input = (int) $matches[1];
+    if (!empty($matches[2]) && preg_match('/triệu|tr/i', $matches[2])) {
+        $price = $input * 1000000;
+    } elseif (!empty($matches[2]) && preg_match('/k/i', $matches[2])) {
+        $price = $input * 1000;
+    } elseif ($input < 1000) {
+        $price = $input * 1000000;
+    } else {
+        $price = $input;
+    }
+
+    $min = $price - 1000000;
+    $max = $price + 1000000;
+
+    $productsArr = DB::table('products')
+        ->whereBetween('price', [$min, $max])
+        ->whereNull('deleted_at')
+        ->where('is_active', 1)
+        ->select('id', 'name', 'price')
+        ->limit(10)
+        ->get();
+
+    if ($productsArr->isEmpty()) {
+        // $responseFlag = "nearby";
+        // $productsArr = DB::table('products')
+        //     ->where('is_active', 1)
+        //     ->whereNull('deleted_at')
+        //     ->orderByRaw("ABS(price - ?)", [$price])
+        //     ->limit(3)
+        //     ->select('id', 'name', 'price')
+        //     ->get();
+           $productsList = "Hiện tại không có sản phẩm phù hợp với yêu cầu của bạn.";
+    }
+}
         foreach ($productsArr as $p) {
-            $productsList .= "- [{$p->name}](http://your-domain.com/api/products/{$p->id}) - Giá: " . number_format($p->price, 0, ',', '.') . " VND\n";
+            $productUrl = url("/products/{$p->id}");
+            $productsList .= "- [{$p->name}]({$productUrl}): "
+                           . number_format($p->price, 0, ',', '.') . " VND\n";
         }
 
         // ===== XỬ LÝ ĐƠN HÀNG =====
@@ -68,15 +260,13 @@ class ChatController extends Controller
         $ordersList = '';
 
         if (preg_match('/đơn hàng\s?#?(\d+)/i', $userMessage, $matches)) {
-            // Nếu user hỏi kèm mã đơn
             $orderId = (int) $matches[1];
             $ordersArr = DB::table('orders')
                 ->where('id', $orderId)
                 ->where('user_id', $request->user()->id ?? null)
-                ->select('id', 'status', 'total_price', 'created_at')
+                ->select('id', 'status', 'total', 'created_at')
                 ->get();
         } elseif (preg_match('/đơn hàng|order/i', $userMessage)) {
-            // Nếu chỉ hỏi "đơn hàng của tôi"
             if ($request->user()) {
                 $ordersArr = DB::table('orders')
                     ->where('user_id', $request->user()->id)
@@ -88,18 +278,20 @@ class ChatController extends Controller
         }
 
         foreach ($ordersArr as $o) {
-            $ordersList .= "- Đơn #{$o->id}, Trạng thái: {$o->status}, Tổng: " . number_format($o->total, 0, ',', '.') . " VND, Ngày: {$o->created_at}\n";
+            $ordersList .= "- Đơn #{$o->id}, Trạng thái: {$o->status}, Tổng: "
+                         . number_format($o->total, 0, ',', '.') . " VND, Ngày: {$o->created_at}\n";
         }
 
         // ===== PROMPT =====
         $systemPrompt = <<<EOT
 Bạn là trợ lý ảo của cửa hàng TechStore.
-- Hỗ trợ khách hàng về sản phẩm và đơn hàng.
-- Nếu ai hỏi bạn là ai, luôn trả lời: "Tôi là trợ lý ảo của cửa hàng TechStore, sẵn sàng hỗ trợ bạn!"
-- Không trả lời các câu hỏi nhạy cảm ngoài phạm vi.
+- Bạn chỉ được giới thiệu sản phẩm từ danh sách dưới đây.
+- Tuyệt đối KHÔNG được bịa thêm sản phẩm ngoài danh sách.
+- Nếu danh sách trống, hãy nói rằng hiện tại không có sản phẩm phù hợp.
 - Khi giới thiệu sản phẩm hoặc đơn hàng, dùng markdown link hoặc danh sách rõ ràng.
+- Nếu ai hỏi bạn là ai, luôn trả lời: "Tôi là trợ lý ảo của cửa hàng TechStore, sẵn sàng hỗ trợ bạn!"
 
-Sản phẩm gợi ý:
+Danh sách sản phẩm gợi ý (lấy từ cơ sở dữ liệu):
 $productsList
 
 Đơn hàng của khách:
@@ -110,6 +302,7 @@ EOT;
 
         $finalPrompt = $systemPrompt . "\n" . $userMessage;
 
+        // ===== GỌI GOOGLE AI =====
         try {
             $response = Http::timeout(30)->post($apiUrl, [
                 'contents' => [
