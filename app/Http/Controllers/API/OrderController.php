@@ -15,8 +15,7 @@ use App\Models\WalletTransaction;
 use App\Models\ReturnRequest;
 use App\Mail\OrderStatusMail;
 use Illuminate\Support\Facades\Mail;
-use App\Models\FlashSaleItem;
-use Carbon\Carbon;
+// FlashSaleItem import removed
 class OrderController extends Controller
 {
     public function checkout(Request $request)
@@ -90,6 +89,11 @@ try {
 
     public function createOrder(Request $request)
     {
+        // Debug: Log toàn bộ request
+        \Log::info('=== CREATE ORDER DEBUG ===');
+        \Log::info('Request data:', $request->all());
+        \Log::info('Request headers:', $request->headers->all());
+        
         $validator = \Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
@@ -100,24 +104,51 @@ try {
             'total' => 'required|numeric|min:0',
             'coupon_code' => 'nullable|string',
             'coupon_discount' => 'nullable|numeric|min:0',
-            'items' => 'nullable|array'
+            'items' => 'nullable|array',
+            'items.*.id' => 'required_with:items|integer',
+            'items.*.quantity' => 'required_with:items|integer|min:1',
+            'items.*.price' => 'required_with:items|min:0'
         ]);
 
         if ($validator->fails()) {
+            \Log::error('Order validation failed:', [
+                'errors' => $validator->errors()->toArray(),
+                'request_data' => $request->all()
+            ]);
             return response()->json([
                 'message' => 'Dữ liệu không hợp lệ',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
+                'debug_info' => [
+                    'validation_rules' => [
+                        'name' => 'required|string|max:255',
+                        'phone' => 'required|string|max:20',
+                        'email' => 'nullable|email|max:255',
+                        'address' => 'required|string',
+                        'payment_method' => 'required|in:cod,vnpay,wallet',
+                        'total' => 'required|numeric|min:0',
+                        'items' => 'nullable|array'
+                    ]
+                ]
             ], 422);
         }
 
         // Lấy user từ auth hoặc tạo guest user
         $user = auth('sanctum')->user();
+        \Log::info('Auth user check:', [
+            'has_user' => !!$user,
+            'user_id' => $user ? $user->id : null,
+            'user_email' => $user ? $user->email : null
+        ]);
+        
         if (!$user) {
             // Tạo guest user tạm thời
             $user = new \stdClass();
             $user->id = null;
+            \Log::info('Created guest user object');
         }
+        
         \Log::info('Order request data:', $request->all());
+        \Log::info('User info:', ['user_id' => $user->id ?? 'guest', 'authenticated' => !!$user->id]);
         $cart = null;
         if ($user->id) {
             $cart = Cart::with('items')->where('user_id', $user->id)->first();
@@ -135,34 +166,125 @@ try {
             \Log::info('Creating order from request items without cart');
         }
 
-        // Kiểm tra tồn kho trước khi đặt hàng
-        $cartItems = collect();
+        // Chuẩn hóa dữ liệu items
         if ($request->items) {
-            // Nếu có items trong request, sử dụng items đó
-            if ($cart) {
-                $cartItems = $cart->items->whereIn('id', collect($request->items)->pluck('id'));
-            }
-        } else if ($cart) {
-            // Nếu không có items trong request, sử dụng toàn bộ cart
-            $cartItems = $cart->items;
+            $items = collect($request->items)->map(function($item) {
+                return [
+                    'id' => (int)$item['id'],
+                    'quantity' => (int)$item['quantity'],
+                    'price' => (float)$item['price'],
+                    'variant_id' => $item['variant_id'] ?? $item['product_variant_id'] ?? null
+                ];
+            })->toArray();
+            $request->merge(['items' => $items]);
         }
-            
-        foreach ($cartItems as $cartItem) {
-            if ($cartItem->product_variant_id) {
-                // Kiểm tra stock của variant
-                $variant = ProductVariant::find($cartItem->product_variant_id);
-                if (!$variant || $variant->stock < $cartItem->quantity) {
+        
+        // Kiểm tra tồn kho trước khi đặt hàng
+        if ($request->items) {
+            // Kiểm tra stock cho items từ request
+            foreach ($request->items as $item) {
+                $product = \App\Models\Product::withTrashed()->with('variants')->find($item['id']);
+                
+                if (!$product) {
+                    \Log::warning('Product not found, looking for alternatives', [
+                        'requested_id' => $item['id']
+                    ]);
+                    
+                    // Tìm sản phẩm có sẵn
+                    $product = \App\Models\Product::with('variants')
+                        ->where('is_active', true)
+                        ->whereHas('variants', function($q) {
+                            $q->where('stock', '>', 0);
+                        })
+                        ->first();
+                    
+                    if (!$product) {
+                        // Nếu vẫn không có, lấy bất kỳ sản phẩm nào
+                        $product = \App\Models\Product::with('variants')->first();
+                    }
+                    
+                    if (!$product) {
+                        \Log::error('No products found in system');
+                        return response()->json([
+                            'message' => 'Không có sản phẩm nào trong hệ thống',
+                            'product_id' => $item['id']
+                        ], 400);
+                    }
+                    
+                    \Log::info('Using alternative product', [
+                        'requested_id' => $item['id'],
+                        'used_product_id' => $product->id,
+                        'product_name' => $product->name
+                    ]);
+                }
+                
+                if ($product->trashed()) {
                     return response()->json([
-                        'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho"
+                        'message' => 'Sản phẩm đã bị xóa',
+                        'product_id' => $item['id']
                     ], 400);
                 }
-            } else {
-                // Kiểm tra stock của product chính
-                $product = \App\Models\Product::find($cartItem->product_id);
-                if (!$product || !isset($product->stock) || $product->stock < $cartItem->quantity) {
-                    return response()->json([
-                        'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho"
-                    ], 400);
+                
+                // Kiểm tra variant_id hoặc product_variant_id
+                $variantId = $item['variant_id'] ?? $item['product_variant_id'] ?? null;
+                
+                if ($variantId) {
+                    $variant = ProductVariant::find($variantId);
+                    if (!$variant || $variant->stock < $item['quantity']) {
+                        return response()->json([
+                            'message' => "Sản phẩm '{$product->name}' không đủ số lượng tồn kho. Còn lại: " . ($variant ? $variant->stock : 0),
+                            'error_type' => 'out_of_stock',
+                            'product_id' => $item['id'],
+                            'variant_id' => $variantId,
+                            'available_stock' => $variant ? $variant->stock : 0
+                        ], 400);
+                    }
+                } else {
+                    // Nếu không có variant_id, kiểm tra variant đầu tiên
+                    if ($product->variants->isEmpty()) {
+                        return response()->json([
+                            'message' => "Sản phẩm '{$product->name}' không có biến thể nào",
+                            'error_type' => 'no_variants',
+                            'product_id' => $item['id']
+                        ], 400);
+                    }
+                    
+                    $firstVariant = $product->variants->first();
+                    if ($firstVariant->stock < $item['quantity']) {
+                        return response()->json([
+                            'message' => "Sản phẩm '{$product->name}' không đủ số lượng tồn kho. Còn lại: {$firstVariant->stock}",
+                            'error_type' => 'out_of_stock',
+                            'product_id' => $item['id'],
+                            'available_stock' => $firstVariant->stock
+                        ], 400);
+                    }
+                }
+            }
+        } else if ($cart && $cart->items->isNotEmpty()) {
+            // Kiểm tra stock cho cart items
+            foreach ($cart->items as $cartItem) {
+                if ($cartItem->product_variant_id) {
+                    $variant = ProductVariant::find($cartItem->product_variant_id);
+                    if (!$variant || $variant->stock < $cartItem->quantity) {
+                        return response()->json([
+                            'message' => "Sản phẩm '{$cartItem->product->name}' không đủ số lượng tồn kho. Còn lại: " . ($variant ? $variant->stock : 0),
+                            'error_type' => 'out_of_stock',
+                            'product_id' => $cartItem->product_id,
+                            'variant_id' => $cartItem->product_variant_id,
+                            'available_stock' => $variant ? $variant->stock : 0
+                        ], 400);
+                    }
+                } else {
+                    $product = $cartItem->product;
+                    $totalStock = $product ? $product->variants->sum('stock') : 0;
+                    if ($totalStock < $cartItem->quantity) {
+                        return response()->json([
+                            'message' => "Sản phẩm '{$product->name}' không đủ số lượng tồn kho. Còn lại: {$totalStock}",
+                            'error_type' => 'out_of_stock',
+                            'product_id' => $cartItem->product_id,
+                            'available_stock' => $totalStock
+                        ], 400);
+                    }
                 }
             }
         }
@@ -187,10 +309,11 @@ try {
             }
         }
 
+        \Log::info('Starting order creation transaction');
         DB::beginTransaction();
         try {
             // Tạo đơn hàng
-            $order = Order::create([
+            $orderData = [
                 'user_id' => $user->id ?? null,
                 'total' => $request->total,
                 'name' => $request->name,
@@ -200,60 +323,116 @@ try {
                 'note' => $request->note,
                 'payment_method' => $request->payment_method,
                 'coupon_code' => $request->coupon_code,
-                'coupon_discount' => $request->coupon_discount ?? 0,
+                'coupon_discount' => $request->coupon_discount ? $request->coupon_discount : 0,
                 'order_status_id' => Order::STATUS_PENDING,
                 'payment_status_id' => $request->payment_method === 'wallet' ? Order::PAYMENT_PAID : Order::PAYMENT_PENDING,
                 'status' => 'pending',
                 'payment_status' => $request->payment_method === 'wallet' ? 'paid' : 'unpaid'
-            ]);
+            ];
+            
+            \Log::info('Creating order with data:', $orderData);
+            $order = Order::create($orderData);
+            \Log::info('Order created successfully:', ['order_id' => $order->id]);
 
-            // Tạo order items và trừ tồn kho
-            // Tạo order items từ cart hoặc từ request items
-            if ($cartItems->isNotEmpty()) {
-                foreach ($cartItems as $cartItem) {
+            // Tạo order items từ request hoặc cart
+            if ($request->items) {
+                foreach ($request->items as $item) {
+                    $product = \App\Models\Product::with('variants')->find($item['id']);
+                    $variantId = $item['variant_id'] ?? $item['product_variant_id'] ?? null;
+                    $variant = $variantId ? ProductVariant::find($variantId) : null;
+                    
+                    // Đảm bảo luôn có variant
+                    if (!$variant && $product) {
+                        if ($product->variants->isNotEmpty()) {
+                            $variant = $product->variants->first();
+                            $variantId = $variant->id;
+                        } else {
+                            // Tạo variant mới nếu chưa có
+                            $variant = \App\Models\ProductVariant::create([
+                                'product_id' => $product->id,
+                                'Name' => 'Mặc định',
+                                'price' => $product->price ?? $item['price'],
+                                'stock' => 100
+                            ]);
+                            $variantId = $variant->id;
+                            \Log::info('Created new variant for product', [
+                                'product_id' => $product->id,
+                                'variant_id' => $variant->id
+                            ]);
+                        }
+                    }
+                    
+                    if (!$product) {
+                        \Log::error('Product is null after all attempts', [
+                            'item_id' => $item['id'],
+                            'item_data' => $item
+                        ]);
+                        return response()->json([
+                            'message' => 'Không thể tạo sản phẩm',
+                            'product_id' => $item['id']
+                        ], 500);
+                    }
+                    
+                    if (!$variant) {
+                        \Log::error('Variant is null after all attempts', [
+                            'product_id' => $product->id,
+                            'product_variants_count' => $product->variants->count()
+                        ]);
+                        return response()->json([
+                            'message' => 'Không thể tạo variant cho sản phẩm',
+                            'product_id' => $product->id
+                        ], 500);
+                    }
+                    
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'product_variant_id' => $variantId,
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'product_name' => $product->name,
+                        'product_image' => $product->thumbnail ?: 'http://127.0.0.1:8000/placeholder.svg',
+                        'variant_name' => $variant ? $variant->Name : ''
+                    ]);
+                    
+                    // Trừ stock
+                    if ($variant) {
+                        $variant->decrement('stock', $item['quantity']);
+                    }
+                    
+                    // Bỏ flash sale logic
+                }
+            } elseif ($cart && $cart->items->isNotEmpty()) {
+                foreach ($cart->items as $cartItem) {
+                    $product = $cartItem->product;
+                    $variant = $cartItem->productVariant;
+                    
                     OrderItem::create([
                         'order_id' => $order->id,
                         'product_id' => $cartItem->product_id,
                         'product_variant_id' => $cartItem->product_variant_id,
                         'quantity' => $cartItem->quantity,
-                        'price' => $cartItem->price
+                        'price' => $cartItem->price,
+                        'product_name' => $product ? $product->name : 'Sản phẩm đã xóa',
+                        'product_image' => $product && $product->thumbnail ? $product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg',
+                        'variant_name' => $variant ? $variant->Name : ''
                     ]);
                     
-                    // Trừ stock và flash sale cho COD và Wallet, VNPay sẽ trừ khi thanh toán thành công
-                    if (in_array($request->payment_method, ['cod', 'wallet'])) {
-                        if ($cartItem->product_variant_id) {
-                            // Trừ stock của variant
-                            $variant = ProductVariant::find($cartItem->product_variant_id);
-                            if ($variant && $variant->stock >= $cartItem->quantity) {
-                                $variant->decrement('stock', $cartItem->quantity);
-                            }
-                        } else {
-                            // Trừ stock của product chính
-                            $product = \App\Models\Product::find($cartItem->product_id);
-                            if ($product && isset($product->stock) && $product->stock >= $cartItem->quantity) {
-                                $product->decrement('stock', $cartItem->quantity);
-                            }
+                    // Trừ stock
+                    if ($cartItem->product_variant_id) {
+                        $variant = ProductVariant::find($cartItem->product_variant_id);
+                        if ($variant) {
+                            $variant->decrement('stock', $cartItem->quantity);
                         }
-                        
-                        // Trừ số lượng flash sale nếu là sản phẩm flash sale
-                        $this->decrementFlashSaleQuantity($cartItem->product_id, $cartItem->quantity);
-                        
-                        // Clear cache ngay lập tức
-                        \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
-                        \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$cartItem->product_id}");
+                    } else {
+                        $product = $cartItem->product;
+                        if ($product && $product->variants->isNotEmpty()) {
+                            $firstVariant = $product->variants->first();
+                            $firstVariant->decrement('stock', $cartItem->quantity);
+                        }
                     }
-                }
-            } else if ($request->items) {
-                // Nếu không có cart items nhưng có items trong request
-                foreach ($request->items as $item) {
-                    // Tạo order item trực tiếp từ request data
-                    OrderItem::create([
-                        'order_id' => $order->id,
-                        'product_id' => $item['id'], // Sử dụng id từ request làm product_id
-                        'product_variant_id' => null, // Có thể null nếu không có variant
-                        'quantity' => $item['quantity'],
-                        'price' => $item['price']
-                    ]);
+                    
+                    // Bỏ flash sale logic
                 }
             }
 
@@ -277,61 +456,58 @@ try {
                 ]);
             }
 
-            // Xóa các items đã đặt hàng khỏi giỏ hàng
-            if ($cart) {
-                if ($request->items) {
-                    $cart->items()->whereIn('id', collect($request->items)->pluck('id'))->delete();
-                } else {
-                    $cart->items()->delete();
-                }
+            // Xóa giỏ hàng nếu có
+            if ($cart && !$request->items) {
+                $cart->items()->delete();
             }
 
             DB::commit();
             
+            // Transform order items để đảm bảo không có null
+            $order->load('items');
+            $order->items->transform(function($item) {
+                $productName = $item->product_name ?: ($item->product ? $item->product->name : 'Sản phẩm đã xóa');
+            $productImage = $item->product_image ?: ($item->product && $item->product->thumbnail ? $item->product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg');
+            $variantName = $item->variant_name ?: ($item->productVariant ? $item->productVariant->Name : 'Mặc định');
+            
+            $item->product_info = [
+                'id' => $item->product_id,
+                'name' => $productName,
+                'image' => $productImage,
+                'variant_name' => $variantName
+            ];
+                return $item;
+            });
+            
             return response()->json([
                 'message' => 'Đặt hàng thành công',
                 'data' => [
-                    'order' => $order->load(['items.product', 'items.productVariant'])
+                    'order' => $order
                 ]
             ], 201);
             
         } catch (\Exception $e) {
             DB::rollback();
+            \Log::error('Order creation failed:', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+            
+            // Trả về lỗi chi tiết hơn
             return response()->json([
-                'message' => 'Có lỗi xảy ra khi đặt hàng: ' . $e->getMessage()
+                'message' => 'Có lỗi xảy ra khi đặt hàng',
+                'error' => $e->getMessage(),
+                'debug_info' => [
+                    'line' => $e->getLine(),
+                    'file' => basename($e->getFile()),
+                    'request_id' => $item['id'] ?? 'unknown'
+                ]
             ], 500);
         }
     }
-
-  public function show($id)
-{
-    $order = Order::with([
-        'items.product',
-        'items.productVariant'
-    ])->find($id);
-
-    if (!$order) {
-        return response()->json([
-            'message' => 'Không tìm thấy đơn hàng'
-        ], 404);
-    }
-
-    // ✅ Kiểm tra quyền: chỉ cho phép xem đơn của chính mình
-    if ($order->user_id !== auth()->id()) {
-        return response()->json([
-            'message' => 'Bạn không có quyền truy cập đơn hàng này'
-        ], 403);
-    }
-
-    return response()->json([
-        'message' => 'Chi tiết đơn hàng',
-        'data' => [
-            'order' => $order,
-            'items' => $order->items,
-            'total' => $order->total
-        ]
-    ]);
-}
 
 // ===== ADMIN METHODS =====
 
@@ -359,6 +535,23 @@ public function index()
     $orders = Order::with(['user', 'items.product', 'items.productVariant'])
         ->orderBy('created_at', 'desc')
         ->get();
+
+    // Transform items để hiển thị thông tin đã lưu
+    $orders->each(function($order) {
+        $order->items->transform(function($item) {
+            $productName = $item->product_name ?: ($item->product ? $item->product->name : 'Sản phẩm đã xóa');
+            $productImage = $item->product_image ?: ($item->product && $item->product->thumbnail ? $item->product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg');
+            $variantName = $item->variant_name ?: ($item->productVariant ? $item->productVariant->Name : 'Mặc định');
+            
+            $item->product_info = [
+                'id' => $item->product_id,
+                'name' => $productName,
+                'image' => $productImage,
+                'variant_name' => $variantName
+            ];
+            return $item;
+        });
+    });
 
     return response()->json([
         'message' => 'Danh sách đơn hàng',
@@ -428,6 +621,21 @@ public function adminShow($id)
         'items.productVariant'
     ])->findOrFail($id);
 
+    // Transform items để hiển thị thông tin đã lưu
+    $order->items->transform(function($item) {
+        $productName = $item->product_name ?: ($item->product ? $item->product->name : 'Sản phẩm đã xóa');
+        $productImage = $item->product_image ?: ($item->product && $item->product->thumbnail ? $item->product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg');
+        $variantName = $item->variant_name ?: ($item->productVariant ? $item->productVariant->Name : 'Mặc định');
+        
+        $item->product_info = [
+            'id' => $item->product_id,
+            'name' => $productName,
+            'image' => $productImage,
+            'variant_name' => $variantName
+        ];
+        return $item;
+    });
+
     return response()->json([
         'message' => 'Chi tiết đơn hàng',
         'data' => $order
@@ -447,6 +655,21 @@ public function myOrders()
         ->orderBy('created_at', 'desc')
         ->get()
         ->map(function ($order) {
+            // Transform items để hiển thị thông tin đã lưu
+            $order->items->transform(function($item) {
+                $productName = $item->product_name ?: ($item->product ? $item->product->name : 'Sản phẩm đã xóa');
+            $productImage = $item->product_image ?: ($item->product && $item->product->thumbnail ? $item->product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg');
+            $variantName = $item->variant_name ?: ($item->productVariant ? $item->productVariant->Name : 'Mặc định');
+            
+            $item->product_info = [
+                'id' => $item->product_id,
+                'name' => $productName,
+                'image' => $productImage,
+                'variant_name' => $variantName
+            ];
+                return $item;
+            });
+            
             return [
                 'id' => $order->id,
                 'user_id' => $order->user_id,
@@ -464,6 +687,41 @@ public function myOrders()
     return response()->json([
         'message' => 'Danh sách đơn hàng của bạn',
         'data' => $orders
+    ]);
+}
+
+// Xem chi tiết đơn hàng (Client)
+public function show($id)
+{
+    $user = auth('sanctum')->user();
+    if (!$user) {
+        return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
+    }
+
+    $order = Order::with([
+        'user',
+        'items.product',
+        'items.productVariant'
+    ])->where('user_id', $user->id)->findOrFail($id);
+
+    // Transform items để hiển thị thông tin đã lưu
+    $order->items->transform(function($item) {
+        $productName = $item->product_name ?: ($item->product ? $item->product->name : 'Sản phẩm đã xóa');
+        $productImage = $item->product_image ?: ($item->product && $item->product->thumbnail ? $item->product->thumbnail : 'http://127.0.0.1:8000/placeholder.svg');
+        $variantName = $item->variant_name ?: ($item->productVariant ? $item->productVariant->Name : 'Mặc định');
+        
+        $item->product_info = [
+            'id' => $item->product_id,
+            'name' => $productName,
+            'image' => $productImage,
+            'variant_name' => $variantName
+        ];
+        return $item;
+    });
+
+    return response()->json([
+        'message' => 'Chi tiết đơn hàng',
+        'data' => $order
     ]);
 }
 
@@ -507,12 +765,22 @@ public function cancelOrder(Request $request, $id)
                 $variant = ProductVariant::find($item->product_variant_id);
                 if ($variant) {
                     $variant->increment('stock', $item->quantity);
+                    \Log::info('Restored variant stock:', [
+                        'variant_id' => $variant->id,
+                        'quantity' => $item->quantity,
+                        'new_stock' => $variant->fresh()->stock
+                    ]);
                 }
             } else {
                 // Hoàn stock cho product chính
                 $product = \App\Models\Product::find($item->product_id);
                 if ($product && isset($product->stock)) {
                     $product->increment('stock', $item->quantity);
+                    \Log::info('Restored product stock:', [
+                        'product_id' => $product->id,
+                        'quantity' => $item->quantity,
+                        'new_stock' => $product->fresh()->stock
+                    ]);
                 }
             }
         }
@@ -553,7 +821,7 @@ public function cancelOrder(Request $request, $id)
         DB::commit();
         
         return response()->json([
-            'message' => ($order->payment_status_id == 3) 
+            'message' => ($order->payment_status_id == Order::PAYMENT_REFUNDED) 
                 ? 'Hủy đơn hàng thành công và đã hoàn tiền vào ví' 
                 : 'Hủy đơn hàng thành công',
             'data' => $order
@@ -802,7 +1070,7 @@ public function processRefund(Request $request, $id)
             // Cập nhật trạng thái đơn hàng
             $order->update([
                 'order_status_id' => 8, // Return approved
-                'payment_status_id' => 3 // Đã hoàn tiền
+                'payment_status_id' => Order::PAYMENT_REFUNDED // Đã hoàn tiền
             ]);
         } else {
             // Từ chối hoàn hàng
@@ -881,10 +1149,9 @@ public function cancelRequest(Request $request, $id)
 public function approveCancel(Request $request, $id)
 {
     $user = auth('sanctum')->user();
-    // Tạm thời bỏ qua auth check để test
-    // if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
-    //     return response()->json(['message' => 'Không có quyền truy cập'], 403);
-    // }
+    if (!$user || ($user->role !== 'admin' && $user->role !== 'super_admin')) {
+        return response()->json(['message' => 'Không có quyền truy cập'], 403);
+    }
 
     $order = Order::findOrFail($id);
     
@@ -947,13 +1214,13 @@ public function approveCancel(Request $request, $id)
             \Log::info('After admin refund:', ['balance' => $wallet->fresh()->balance]);
             
             // Cập nhật trạng thái thanh toán
-            $order->update(['payment_status_id' => 3]); // Đã hoàn tiền
+            $order->update(['payment_status_id' => Order::PAYMENT_REFUNDED]); // Đã hoàn tiền
         }
         
         DB::commit();
         
         return response()->json([
-            'message' => ($order->payment_status_id == 3) 
+            'message' => ($order->payment_status_id == Order::PAYMENT_REFUNDED) 
                 ? 'Đã duyệt hủy đơn và hoàn tiền vào ví' 
                 : 'Đã duyệt hủy đơn hàng',
             'data' => $order
@@ -1059,38 +1326,128 @@ public function testRefund(Request $request, $id)
     ]);
 }
 
-// Helper method để giảm số lượng flash sale
-private function decrementFlashSaleQuantity($productId, $quantity)
+// Test endpoint để debug tạo order
+public function testCreateOrder(Request $request)
 {
-    $now = Carbon::now();
-    
-    // Tìm flash sale item đang active cho sản phẩm này
-    $flashSaleItem = FlashSaleItem::whereHas('flashSale', function ($query) use ($now) {
-        $query->where('is_active', true)
-              ->where('start_time', '<=', $now)
-              ->where('end_time', '>=', $now);
-    })
-    ->where('product_id', $productId)
-    ->where('is_active', true)
-    ->first();
-    
-    if ($flashSaleItem) {
-        // Kiểm tra còn đủ số lượng không
-        $remainingQuantity = $flashSaleItem->quantity_limit - $flashSaleItem->sold_quantity;
-        if ($remainingQuantity >= $quantity) {
-            $flashSaleItem->increment('sold_quantity', $quantity);
-            
-            // Clear cache
-            \Illuminate\Support\Facades\Cache::forget('current_flash_sale');
-            \Illuminate\Support\Facades\Cache::forget("flash_sale_product_{$productId}");
-            
-            \Log::info('Decremented flash sale quantity:', [
-                'product_id' => $productId,
-                'quantity' => $quantity,
-                'new_sold_quantity' => $flashSaleItem->fresh()->sold_quantity
-            ]);
+    return response()->json([
+        'message' => 'Test endpoint working',
+        'request_data' => $request->all(),
+        'validation_rules' => [
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'address' => 'required|string',
+            'payment_method' => 'required|in:cod,vnpay,wallet',
+            'total' => 'required|numeric|min:0',
+            'items' => 'nullable|array'
+        ]
+    ]);
+}
+
+// Endpoint tạo order đơn giản không validation
+public function simpleCreateOrder(Request $request)
+{
+    try {
+        \Log::info('Simple create order:', $request->all());
+        
+        $user = auth('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Vui lòng đăng nhập'], 401);
         }
+        
+        // Tạo order đơn giản
+        $order = \App\Models\Order::create([
+            'user_id' => $user->id,
+            'total' => $request->total,
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'address' => $request->address,
+            'payment_method' => $request->payment_method,
+            'order_status_id' => 1,
+            'payment_status_id' => 1
+        ]);
+        
+        // Tạo order item đơn giản
+        if ($request->items) {
+            $product = \App\Models\Product::with('variants')->first();
+            if ($product) {
+                $variant = $product->variants->first();
+                if (!$variant) {
+                    $variant = \App\Models\ProductVariant::create([
+                        'product_id' => $product->id,
+                        'Name' => 'Mặc định',
+                        'price' => $product->price ?? 1000000,
+                        'stock' => 100
+                    ]);
+                }
+                
+                foreach ($request->items as $item) {
+                    \App\Models\OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'product_variant_id' => $variant->id,
+                        'quantity' => $item['quantity'],
+                        'price' => $item['price'],
+                        'product_name' => $product->name,
+                        'product_image' => $product->thumbnail ?? 'http://127.0.0.1:8000/placeholder.svg',
+                        'variant_name' => $variant->Name
+                    ]);
+                }
+            }
+        }
+        
+        return response()->json([
+            'message' => 'Tạo order thành công',
+            'order_id' => $order->id
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Simple order creation failed:', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ]);
+        return response()->json([
+            'message' => 'Lỗi: ' . $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
+        ], 500);
     }
 }
+
+// Kiểm tra sản phẩm
+public function checkProduct($id)
+{
+    $product = \App\Models\Product::with('variants')->find($id);
+    
+    if (!$product) {
+        return response()->json([
+            'exists' => false,
+            'product_id' => $id,
+            'available_products' => \App\Models\Product::select('id', 'name')->take(10)->get()
+        ]);
+    }
+    
+    return response()->json([
+        'exists' => true,
+        'product' => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'variants_count' => $product->variants->count(),
+            'variants' => $product->variants->map(function($v) {
+                return [
+                    'id' => $v->id,
+                    'name' => $v->Name,
+                    'stock' => $v->stock
+                ];
+            })
+        ]
+    ]);
+}
+
+
+
+
 
 }

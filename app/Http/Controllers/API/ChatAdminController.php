@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ChatAdminController extends Controller
 {
@@ -18,10 +19,13 @@ class ChatAdminController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $chats = Chat::with(['user:id,name,email', 'admin:id,name'])
-            ->withCount('messages')
-            ->latest('updated_at')
-            ->get();
+        $chats = Cache::remember('admin_chats_' . $user->id, 300, function () {
+            return Chat::with(['user:id,name,email', 'admin:id,name'])
+                ->withCount('messages')
+                ->latest('updated_at')
+                ->limit(50)
+                ->get();
+        });
 
         return response()->json(['data' => $chats]);
     }
@@ -56,9 +60,14 @@ class ChatAdminController extends Controller
             'message'   => $request->message,
         ]);
 
-        // broadcast(new ChatMessageSent($msg))->toOthers();
+        // Clear cache khi có tin nhắn mới
+        Cache::forget('chat_messages_' . $chat->id);
+        Cache::forget('admin_chats_' . $user->id);
 
-        return response()->json(['data' => $msg->load('sender')], 201);
+        // Broadcast real-time
+        broadcast(new \App\Events\ChatMessageSent($msg->load('sender'), $chat->id));
+
+        return response()->json(['data' => $msg], 201);
     }
 
     // ADMIN: Lấy danh sách tin nhắn trong 1 chat
@@ -69,7 +78,9 @@ class ChatAdminController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $messages = $chat->messages()->with('sender:id,name')->orderBy('id')->get();
+        $messages = Cache::remember('chat_messages_' . $chat->id, 120, function () use ($chat) {
+            return $chat->messages()->with('sender:id,name')->orderBy('id')->limit(100)->get();
+        });
 
         return response()->json(['data' => $messages]);
     }

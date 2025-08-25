@@ -55,7 +55,7 @@ class Order extends Model
     // Payment status constants
     const PAYMENT_PENDING = 1;
     const PAYMENT_PAID = 2;
-    const PAYMENT_FAILED = 3;
+    const PAYMENT_REFUNDED = 3;
 
     public function user()
     {
@@ -114,7 +114,7 @@ class Order extends Model
         $statuses = [
             1 => 'Chưa thanh toán',
             2 => 'Đã thanh toán',
-            3 => 'Thanh toán thất bại'
+            3 => 'Đã hoàn tiền'
         ];
         
         return $statuses[$this->payment_status_id] ?? 'Không xác định';

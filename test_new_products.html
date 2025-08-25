@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test New Products Delete</title>
+</head>
+<body>
+    <h1>Test New Products Delete</h1>
+    
+    <div>
+        <h3>1. Test without Auth (Product ID 38)</h3>
+        <button onclick="testNoAuth(38)">Delete Product 38 (No Auth)</button>
+    </div>
+    
+    <div>
+        <h3>2. Test with Auth</h3>
+        <input type="text" id="token" placeholder="Enter admin token" style="width: 400px;">
+        <br><br>
+        <button onclick="testWithAuth(38)">Delete Product 38 (With Auth)</button>
+        <button onclick="testAdminRoute(38)">Test Admin Route</button>
+    </div>
+    
+    <div>
+        <h3>3. Check Products</h3>
+        <button onclick="checkProducts()">Check All Products</button>
+        <button onclick="checkTrashed()">Check Trashed</button>
+    </div>
+    
+    <div id="result"></div>
+
+    <script>
+        async function testNoAuth(id) {
+            try {
+                const response = await fetch(`http://localhost:8000/api/debug-delete/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                showResult(`No Auth Delete (${response.status})`, data);
+            } catch (error) {
+                showResult('Error', error.message);
+            }
+        }
+
+        async function testWithAuth(id) {
+            const token = document.getElementById('token').value;
+            try {
+                const response = await fetch(`http://localhost:8000/api/auth-delete/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                showResult(`Auth Delete (${response.status})`, data);
+            } catch (error) {
+                showResult('Error', error.message);
+            }
+        }
+
+        async function testAdminRoute(id) {
+            const token = document.getElementById('token').value;
+            try {
+                const response = await fetch(`http://localhost:8000/api/admin/products/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                showResult(`Admin Route Delete (${response.status})`, data);
+            } catch (error) {
+                showResult('Error', error.message);
+            }
+        }
+
+        async function checkProducts() {
+            try {
+                const response = await fetch('http://localhost:8000/api/test-products');
+                const data = await response.json();
+                showResult('Products Check', data);
+            } catch (error) {
+                showResult('Error', error.message);
+            }
+        }
+
+        async function checkTrashed() {
+            const token = document.getElementById('token').value;
+            try {
+                const response = await fetch('http://localhost:8000/api/admin/products/trashed', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                showResult('Trashed Products', data);
+            } catch (error) {
+                showResult('Error', error.message);
+            }
+        }
+
+        function showResult(title, data) {
+            document.getElementById('result').innerHTML = 
+                `<h3>${title}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+    </script>
+</body>
+</html>

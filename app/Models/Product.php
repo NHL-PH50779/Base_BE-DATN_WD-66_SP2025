@@ -39,4 +39,21 @@ public function comments()
 {
     return $this->hasMany(Comment::class);
 }
+
+// Accessor để tự động xử lý ảnh
+public function getThumbnailAttribute($value)
+{
+    // Kiểm tra các trường hợp cần thay thế
+    if (!$value || 
+        trim($value) === '' ||
+        $value === 'null' ||
+        $value === 'No image' ||
+        $value === 'Noimage' ||
+        stripos($value, 'no image') !== false ||
+        stripos($value, 'noimage') !== false) {
+        return 'http://127.0.0.1:8000/placeholder.svg';
+    }
+    
+    return $value;
+}
 }

@@ -86,12 +86,14 @@ class CommentController extends Controller
         $request->validate([
             'product_id' => 'required|exists:products,id',
             'content' => 'required|string|max:1000',
-            'rating' => 'required|integer|min:0|max:5'
+            'rating' => 'required|integer|min:0|max:5',
+            'order_id' => 'nullable|exists:orders,id'
         ]);
 
         $comment = Comment::create([
             'user_id' => $request->user()->id,
             'product_id' => $request->product_id,
+            'order_id' => $request->order_id,
             'content' => $request->content,
             'rating' => $request->rating,
             'status' => 'pending'
@@ -106,7 +108,12 @@ class CommentController extends Controller
     // Admin methods
     public function adminIndex()
     {
-        $comments = Comment::with(['user:id,name', 'product:id,name'])
+        $comments = Comment::with([
+            'user:id,name,email', 
+            'product:id,name,thumbnail',
+            'order:id',
+            'order.items.product:id,name,thumbnail'
+        ])
             ->orderBy('created_at', 'desc')
             ->get();
             
@@ -126,13 +133,13 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Cập nhật trạng thái thành công',
-            'data' => $comment->load(['user:id,name', 'product:id,name'])
+            'data' => $comment->load(['user:id,name,email', 'product:id,name,thumbnail'])
         ]);
     }
 
     public function show($id)
     {
-        $comment = Comment::with(['user:id,name', 'product:id,name'])
+        $comment = Comment::with(['user:id,name,email', 'product:id,name,thumbnail'])
             ->findOrFail($id);
             
         return response()->json([
@@ -147,7 +154,7 @@ class CommentController extends Controller
 
         return response()->json([
             'message' => 'Duyệt bình luận thành công',
-            'data' => $comment->load(['user:id,name', 'product:id,name'])
+            'data' => $comment->load(['user:id,name,email', 'product:id,name,thumbnail'])
         ]);
     }
 

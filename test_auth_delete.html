@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Auth Delete</title>
+</head>
+<body>
+    <h1>Test Authenticated Delete</h1>
+    <input type="text" id="token" placeholder="Enter your token" style="width: 400px;">
+    <br><br>
+    <button onclick="testAuthDelete()">Test Delete with Auth</button>
+    <button onclick="testWithoutAuth()">Test Delete without Auth</button>
+    
+    <div id="result"></div>
+
+    <script>
+        async function testAuthDelete() {
+            const token = document.getElementById('token').value;
+            try {
+                const response = await fetch('http://localhost:8000/api/admin/products/54', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('result').innerHTML = 
+                    `<h3>Status: ${response.status}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Error: ' + error.message;
+            }
+        }
+
+        async function testWithoutAuth() {
+            try {
+                const response = await fetch('http://localhost:8000/api/admin/products/54', {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                document.getElementById('result').innerHTML = 
+                    `<h3>Status: ${response.status}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

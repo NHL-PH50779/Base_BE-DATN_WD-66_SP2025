@@ -27,41 +27,48 @@ class Wallet extends Model
 
     public function addMoney($amount, $description = 'Nạp tiền', $referenceType = null, $referenceId = null)
     {
-        $balanceBefore = $this->balance;
-        $this->balance += $amount;
-        $this->save();
+        return \DB::transaction(function () use ($amount, $description, $referenceType, $referenceId) {
+            $this->lockForUpdate();
+            $balanceBefore = $this->balance;
+            $this->balance += $amount;
+            $this->save();
 
-        return WalletTransaction::create([
-            'user_id' => $this->user_id,
-            'type' => 'credit',
-            'amount' => $amount,
-            'balance_before' => $balanceBefore,
-            'balance_after' => $this->balance,
-            'description' => $description,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId
-        ]);
+            return WalletTransaction::create([
+                'user_id' => $this->user_id,
+                'type' => 'credit',
+                'amount' => $amount,
+                'balance_before' => $balanceBefore,
+                'balance_after' => $this->balance,
+                'description' => $description,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId
+            ]);
+        });
     }
 
     public function subtractMoney($amount, $description = 'Thanh toán', $referenceType = null, $referenceId = null)
     {
-        if ($this->balance < $amount) {
-            throw new \Exception('Số dư không đủ');
-        }
+        return \DB::transaction(function () use ($amount, $description, $referenceType, $referenceId) {
+            $this->lockForUpdate();
+            
+            if ($this->balance < $amount) {
+                throw new \Exception('Số dư không đủ');
+            }
 
-        $balanceBefore = $this->balance;
-        $this->balance -= $amount;
-        $this->save();
+            $balanceBefore = $this->balance;
+            $this->balance -= $amount;
+            $this->save();
 
-        return WalletTransaction::create([
-            'user_id' => $this->user_id,
-            'type' => 'debit',
-            'amount' => $amount,
-            'balance_before' => $balanceBefore,
-            'balance_after' => $this->balance,
-            'description' => $description,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId
-        ]);
+            return WalletTransaction::create([
+                'user_id' => $this->user_id,
+                'type' => 'debit',
+                'amount' => $amount,
+                'balance_before' => $balanceBefore,
+                'balance_after' => $this->balance,
+                'description' => $description,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId
+            ]);
+        });
     }
 }

@@ -29,12 +29,32 @@ class CartController extends Controller
         
         \Log::info('Cart items for user ' . $user->id . ': ' . $items->count()); // Debug log
         
-        // Transform items to include stock info
+        // Transform items to include stock info and handle null products
         $transformedItems = $items->map(function ($item) {
             $itemArray = $item->toArray();
+            
+            // Đảm bảo product không null
+            if (!$item->product) {
+                $itemArray['product'] = [
+                    'id' => $item->product_id,
+                    'name' => 'Sản phẩm đã xóa',
+                    'thumbnail' => 'http://127.0.0.1:8000/placeholder.svg'
+                ];
+            } else {
+                $itemArray['product']['thumbnail'] = $item->product->thumbnail ?: 'http://127.0.0.1:8000/placeholder.svg';
+            }
+            
+            // Đảm bảo productVariant không null
             if ($item->productVariant) {
                 $itemArray['product_variant']['stock'] = $item->productVariant->stock;
+            } else if ($item->product_variant_id) {
+                $itemArray['product_variant'] = [
+                    'id' => $item->product_variant_id,
+                    'Name' => 'Phiên bản đã xóa',
+                    'stock' => 0
+                ];
             }
+            
             return $itemArray;
         });
         

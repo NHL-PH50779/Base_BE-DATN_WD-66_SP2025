@@ -38,6 +38,7 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('/products/search', [ProductController::class, 'search']);
+Route::get('/products/home', [ProductController::class, 'home'])->middleware('cache.headers:public;max_age=300');
 Route::get('/products', [ProductController::class, 'index'])->middleware('cache.headers:public;max_age=300');
 Route::get('/products/{id}', [ProductController::class, 'show']);
 
@@ -60,19 +61,21 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);
 
-// Flash Sale - public routes
-Route::prefix('flash-sale')->group(function () {
-    Route::get('/current', [FlashSaleController::class, 'current']);
-    Route::get('/upcoming', [FlashSaleController::class, 'upcoming']);
-    Route::post('/check-product', [FlashSaleController::class, 'checkProduct']);
-    Route::get('/{id}/stats', [FlashSaleController::class, 'stats']);
-});
+// Flash Sale routes removed
 
 Route::post('/vouchers/validate', [VoucherController::class, 'validateVoucher']);
 Route::get('/vouchers/available', [VoucherController::class, 'getAvailableVouchers']);
 
 // Guest checkout - public
 Route::post('/orders', [OrderController::class, 'createOrder']);
+Route::post('/test-create-order', [OrderController::class, 'testCreateOrder']);
+Route::middleware('auth:sanctum')->post('/simple-create-order', [OrderController::class, 'simpleCreateOrder']);
+Route::get('/check-product/{id}', [OrderController::class, 'checkProduct']);
+
+
+// Stock check - public
+Route::get('/products/{id}/stock', [\App\Http\Controllers\API\StockController::class, 'checkStock']);
+Route::post('/validate-purchase', [\App\Http\Controllers\API\StockController::class, 'validatePurchase']);
 
 // VNPay routes - public
 Route::post('/vnpay/create-payment', [\App\Http\Controllers\API\VNPayController::class, 'createPayment']);
@@ -160,6 +163,68 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/test/vnpay-refund/{orderId}', [\App\Http\Controllers\API\TestController::class, 'testVNPayRefund']);
     Route::get('/test/withdraw-request', [\App\Http\Controllers\API\TestController::class, 'testWithdrawRequest']);
 });
+
+// Test variant stock (public)
+Route::get('/test/variant-stock/{variantId}', function($variantId) {
+    try {
+        $variant = \App\Models\ProductVariant::with('product')->find($variantId);
+        if (!$variant) {
+            return response()->json(['error' => 'Variant not found'], 404);
+        }
+        
+        return response()->json([
+            'variant_id' => $variant->id,
+            'variant_name' => $variant->Name,
+            'current_stock' => $variant->stock,
+            'product_id' => $variant->product_id,
+            'product_name' => $variant->product->name ?? 'Unknown'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+// Test dashboard stats (public)
+Route::get('/test/dashboard-stats', function() {
+    try {
+        $controller = new \App\Http\Controllers\API\DashboardController();
+        $request = new \Illuminate\Http\Request();
+        $request->merge(['period' => '30days']);
+        
+        return $controller->getStats($request);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+// List all variants
+Route::get('/test/all-variants', function() {
+    try {
+        $variants = \App\Models\ProductVariant::with('product:id,name')
+            ->select('id', 'product_id', 'Name', 'stock', 'price')
+            ->get();
+        
+        return response()->json([
+            'total' => $variants->count(),
+            'variants' => $variants->map(function($v) {
+                return [
+                    'id' => $v->id,
+                    'name' => $v->Name,
+                    'stock' => $v->stock,
+                    'price' => $v->price,
+                    'product_name' => $v->product->name ?? 'Unknown'
+                ];
+            })
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+// AI Test routes (public for testing)
+Route::post('/test/ai', [\App\Http\Controllers\API\TestAIController::class, 'testAI']);
+Route::post('/test/gemini-direct', [\App\Http\Controllers\API\TestAIController::class, 'testGeminiDirect']);
+Route::post('/ai-chat-public', [\App\Http\Controllers\API\AIChatController::class, 'chat']);
 
 // Test withdraw endpoint (no auth)
 Route::get('/test/withdraw-table', function() {
@@ -278,6 +343,124 @@ Route::post('/debug-otp', function (\Illuminate\Http\Request $request) {
     }
 });
 
+// Test endpoints
+Route::put('/test-update/{id}', function($id, Request $request) {
+    try {
+        $product = \App\Models\Product::findOrFail($id);
+        $oldName = $product->name;
+        
+        $result = $product->update([
+            'name' => $request->name ?? $product->name,
+            'description' => $request->description ?? $product->description
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'updated' => $result,
+            'old_name' => $oldName,
+            'new_name' => $product->fresh()->name,
+            'request_data' => $request->all()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::delete('/test-delete/{id}', function($id) {
+    try {
+        $product = \App\Models\Product::findOrFail($id);
+        $deleted = $product->delete();
+        
+        return response()->json([
+            'success' => true,
+            'deleted' => $deleted,
+            'product_id' => $id,
+            'deleted_at' => $product->fresh()->deleted_at
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::get('/test-trashed', function() {
+    try {
+        $products = \App\Models\Product::onlyTrashed()->get();
+        return response()->json([
+            'count' => $products->count(),
+            'products' => $products
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::get('/test-products', function() {
+    try {
+        $active = \App\Models\Product::select('id', 'name')->whereNull('deleted_at')->take(5)->get();
+        $deleted = \App\Models\Product::onlyTrashed()->select('id', 'name')->take(5)->get();
+        
+        return response()->json([
+            'active_count' => $active->count(),
+            'active_products' => $active,
+            'deleted_count' => $deleted->count(),
+            'deleted_products' => $deleted
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::delete('/debug-delete/{id}', function($id) {
+    try {
+        $product = \App\Models\Product::find($id);
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
+        
+        $oldName = $product->name;
+        $deleted = $product->delete();
+        
+        return response()->json([
+            'success' => true,
+            'product_id' => $id,
+            'product_name' => $oldName,
+            'deleted' => $deleted,
+            'deleted_at' => $product->fresh()->deleted_at
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+// Test auth delete
+Route::middleware('auth:sanctum')->delete('/auth-delete/{id}', function($id) {
+    try {
+        $user = auth()->user();
+        if (!$user || !in_array($user->role, ['admin', 'super_admin'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+        
+        $product = \App\Models\Product::find($id);
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
+        
+        $oldName = $product->name;
+        $deleted = $product->delete();
+        
+        return response()->json([
+            'success' => true,
+            'product_id' => $id,
+            'product_name' => $oldName,
+            'deleted' => $deleted,
+            'deleted_at' => $product->fresh()->deleted_at,
+            'user' => $user->name
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Users
     Route::get('/users', function () {
@@ -285,15 +468,17 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     });
     Route::apiResource('users', UserController::class);
 
-    // Products
-    Route::get('/products', [ProductController::class, 'index']);
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::put('/products/{id}', [ProductController::class, 'update']);
-    Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+    // Products - routes cụ thể trước, routes có parameter sau
     Route::get('/products/trashed', [ProductController::class, 'trashed']);
     Route::put('/products/restore/{id}', [ProductController::class, 'restore']);
     Route::delete('/products/force-delete/{id}', [ProductController::class, 'forceDelete']);
     Route::put('/products/toggle-active/{id}', [ProductController::class, 'toggleActive']);
+    
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{id}', [ProductController::class, 'show']);
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
     // Product Variants
     Route::get('/products/{productId}/variants', [ProductVariantController::class, 'index']);
@@ -328,7 +513,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
     Route::get('/stats', [DashboardController::class, 'getStats']);
 
-    // Orders
+    // Orders - API tối ưu
+    Route::get('/orders/fast', [OrderController::class, 'adminFast']); // API siêu nhanh
+    Route::get('/orders/{id}/fast', [OrderController::class, 'adminShowFast']); // Chi tiết nhanh
+    
+    // Orders - API cũ (backward compatibility)
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'adminShow']);
     Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
@@ -349,14 +538,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::put('/comments/{id}/status', [CommentController::class, 'updateStatus']);
     Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
 
-    // Flash Sales
-    Route::prefix('flash-sales')->group(function () {
-        Route::get('/', [FlashSaleController::class, 'adminIndex']);
-        Route::post('/', [FlashSaleController::class, 'adminStore']);
-        Route::get('/{id}', [FlashSaleController::class, 'show']);
-        Route::put('/{id}', [FlashSaleController::class, 'adminUpdate']);
-        Route::delete('/{id}', [FlashSaleController::class, 'adminDestroy']);
-    });
+    // Flash Sales routes removed
     
     // Return Requests & Withdraw Requests (Admin)
     Route::get('/return-requests', [ReturnRequestController::class, 'index']);
@@ -418,9 +600,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 use App\Http\Controllers\API\ChatController;
 use App\Http\Controllers\API\ChatUserController;
 use App\Http\Controllers\API\ChatAdminController;
+use App\Http\Controllers\API\AIChatController;
 
 Route::middleware('auth:sanctum')->group(function () {
     // AI Chatbot
+    Route::post('/ai-chat', [AIChatController::class, 'chat']);
     Route::post('/chat', [ChatController::class, 'chat']);
     
     // User chat with admin
@@ -482,15 +666,18 @@ Route::middleware('auth:sanctum')->group(function () {
             // Cập nhật thời gian của chat
             DB::table('chats')->where('id', $chat)->update(['updated_at' => now()]);
             
-            return response()->json([
-                'data' => [
-                    'id' => $msgId,
-                    'sender_id' => $user->id,
-                    'message' => $message,
-                    'created_at' => now()->toISOString(),
-                    'sender' => ['id' => $user->id, 'name' => $user->name]
-                ]
-            ], 201);
+            $messageData = [
+                'id' => $msgId,
+                'sender_id' => $user->id,
+                'message' => $message,
+                'created_at' => now()->toISOString(),
+                'sender' => ['id' => $user->id, 'name' => $user->name]
+            ];
+            
+            // Broadcast real-time
+            broadcast(new \App\Events\ChatMessageSent($messageData, $chat));
+            
+            return response()->json(['data' => $messageData], 201);
         } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -621,15 +808,18 @@ Route::middleware('auth:sanctum')->group(function () {
             // Cập nhật thời gian của chat
             DB::table('chats')->where('id', $id)->update(['updated_at' => now()]);
             
-            return response()->json([
-                'data' => [
-                    'id' => $msgId,
-                    'sender_id' => $user->id,
-                    'message' => $message,
-                    'created_at' => now()->toISOString(),
-                    'sender' => ['id' => $user->id, 'name' => $user->name]
-                ]
-            ], 201);
+            $messageData = [
+                'id' => $msgId,
+                'sender_id' => $user->id,
+                'message' => $message,
+                'created_at' => now()->toISOString(),
+                'sender' => ['id' => $user->id, 'name' => $user->name]
+            ];
+            
+            // Broadcast real-time
+            broadcast(new \App\Events\ChatMessageSent($messageData, $id));
+            
+            return response()->json(['data' => $messageData], 201);
         } catch (Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }

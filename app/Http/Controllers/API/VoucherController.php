@@ -21,6 +21,9 @@ class VoucherController extends Controller
 
     public function store(Request $request)
     {
+        // Debug request data
+        \Log::info('Voucher store request:', $request->all());
+        
         $validator = Validator::make($request->all(), [
             'code' => 'required|string|unique:vouchers,code|max:50',
             'name' => 'required|string|max:255',
@@ -41,7 +44,10 @@ class VoucherController extends Controller
             ], 422);
         }
 
-        $voucher = Voucher::create($request->all());
+        $data = $request->all();
+        \Log::info('Creating voucher with data:', $data);
+        $voucher = Voucher::create($data);
+        \Log::info('Created voucher:', $voucher->toArray());
 
         return response()->json([
             'message' => 'Tạo voucher thành công',
@@ -61,6 +67,9 @@ class VoucherController extends Controller
     public function update(Request $request, $id)
     {
         $voucher = Voucher::findOrFail($id);
+        
+        // Debug request data
+        \Log::info('Voucher update request for ID ' . $id . ':', $request->all());
         
         $validator = Validator::make($request->all(), [
             'code' => 'required|string|max:50|unique:vouchers,code,' . $id,
@@ -82,7 +91,10 @@ class VoucherController extends Controller
             ], 422);
         }
 
-        $voucher->update($request->all());
+        $data = $request->all();
+        \Log::info('Updating voucher with data:', $data);
+        $voucher->update($data);
+        \Log::info('Updated voucher:', $voucher->fresh()->toArray());
 
         return response()->json([
             'message' => 'Cập nhật voucher thành công',
