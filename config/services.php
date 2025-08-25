@@ -14,6 +14,13 @@ return [
     |
     */
 
+    'mailgun' => [
+        'domain' => env('MAILGUN_DOMAIN'),
+        'secret' => env('MAILGUN_SECRET'),
+        'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
+        'scheme' => 'https',
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
@@ -24,15 +31,14 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'resend' => [
-        'key' => env('RESEND_KEY'),
-    ],
-
-    'slack' => [
-        'notifications' => [
-            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
-        ],
+    'google_ai' => [
+        'api_key' => env('GOOGLE_AI_API_KEY'),
+        'model' => env('GOOGLE_AI_MODEL', 'gemini-1.5-flash'),
+        'enabled' => env('AI_CHAT_ENABLED', true),
+        'fallback_enabled' => env('AI_FALLBACK_ENABLED', true),
+        'timeout' => env('AI_TIMEOUT', 15),
+        'max_tokens' => env('AI_MAX_TOKENS', 500),
+        'temperature' => env('AI_TEMPERATURE', 0.7),
     ],
 
 ];

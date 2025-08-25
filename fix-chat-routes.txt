@@ -1,0 +1,31 @@
+🔧 SỬA LỖI 404 API CHAT
+
+1. MỞ FILE: routes/api.php
+
+2. THÊM VÀO CUỐI FILE:
+
+use App\Http\Controllers\API\ChatController;
+use App\Http\Controllers\API\ChatUserController; 
+use App\Http\Controllers\API\ChatAdminController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/chat', [ChatController::class, 'chat']);
+    Route::post('/chat/start', [ChatUserController::class, 'start']);
+    Route::get('/chat/{chat}/messages', [ChatUserController::class, 'messages']);
+    Route::post('/chat/{chat}/send', [ChatUserController::class, 'send']);
+    Route::get('/admin/chats', [ChatAdminController::class, 'listForAdmin']);
+    Route::post('/admin/chats/{chat}/claim', [ChatAdminController::class, 'claim']);
+    Route::post('/admin/chats/{chat}/send', [ChatAdminController::class, 'send']);
+    Route::get('/admin/chats/{chat}/messages', [ChatAdminController::class, 'messages']);
+});
+
+3. CHẠY LỆNH:
+php artisan route:clear
+php artisan config:clear
+php artisan serve
+
+4. KIỂM TRA:
+- Vào http://localhost:8000/api/chat (POST)
+- Hoặc test bằng Postman
+
+✅ AI Chat sẽ hoạt động!

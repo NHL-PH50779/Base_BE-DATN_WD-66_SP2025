@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Complete CRUD</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        input, select { margin: 5px; padding: 8px; width: 200px; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        #result { margin-top: 20px; padding: 15px; background: #f5f5f5; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Test Complete Product CRUD</h1>
+    
+    <div class="section">
+        <h3>Authentication</h3>
+        <input type="text" id="token" placeholder="Admin Token" style="width: 400px;">
+        <button onclick="testAuth()">Test Auth</button>
+    </div>
+    
+    <div class="section">
+        <h3>1. CREATE Product</h3>
+        <input type="text" id="createName" placeholder="Product Name" value="Test Product">
+        <input type="text" id="createDesc" placeholder="Description" value="Test Description">
+        <select id="createBrand">
+            <option value="1">Dell</option>
+            <option value="2">HP</option>
+            <option value="3">Asus</option>
+        </select>
+        <select id="createCategory">
+            <option value="1">Gaming</option>
+            <option value="2">Office</option>
+        </select>
+        <button onclick="testCreate()">Create Product</button>
+    </div>
+    
+    <div class="section">
+        <h3>2. READ Products</h3>
+        <button onclick="testRead()">Get All Products</button>
+        <button onclick="testReadTrashed()">Get Trashed Products</button>
+    </div>
+    
+    <div class="section">
+        <h3>3. UPDATE Product</h3>
+        <input type="number" id="updateId" placeholder="Product ID">
+        <input type="text" id="updateName" placeholder="New Name" value="Updated Product">
+        <button onclick="testUpdate()">Update Product</button>
+    </div>
+    
+    <div class="section">
+        <h3>4. DELETE Operations</h3>
+        <input type="number" id="deleteId" placeholder="Product ID">
+        <button onclick="testSoftDelete()">Soft Delete</button>
+        <button onclick="testRestore()">Restore</button>
+        <button onclick="testForceDelete()">Force Delete</button>
+    </div>
+    
+    <div id="result"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        
+        function getHeaders() {
+            const token = document.getElementById('token').value;
+            return {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+        }
+        
+        function showResult(title, data) {
+            document.getElementById('result').innerHTML = 
+                `<h3>${title}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        
+        async function testAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/products`, {
+                    headers: getHeaders()
+                });
+                const data = await response.json();
+                showResult(`Auth Test (${response.status})`, data);
+            } catch (error) {
+                showResult('Auth Error', error.message);
+            }
+        }
+        
+        async function testCreate() {
+            try {
+                const productData = {
+                    name: document.getElementById('createName').value,
+                    description: document.getElementById('createDesc').value,
+                    brand_id: parseInt(document.getElementById('createBrand').value),
+                    category_id: parseInt(document.getElementById('createCategory').value),
+                    is_active: true
+                };
+                
+                const response = await fetch(`${API_BASE}/admin/products`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(productData)
+                });
+                
+                const data = await response.json();
+                showResult(`Create Product (${response.status})`, data);
+            } catch (error) {
+                showResult('Create Error', error.message);
+            }
+        }
+        
+        async function testRead() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/products`, {
+                    headers: getHeaders()
+                });
+                const data = await response.json();
+                showResult(`Read Products (${response.status})`, {
+                    count: data.data?.length || 0,
+                    products: data.data?.slice(0, 3) || []
+                });
+            } catch (error) {
+                showResult('Read Error', error.message);
+            }
+        }
+        
+        async function testReadTrashed() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/products/trashed`, {
+                    headers: getHeaders()
+                });
+                const data = await response.json();
+                showResult(`Trashed Products (${response.status})`, data);
+            } catch (error) {
+                showResult('Read Trashed Error', error.message);
+            }
+        }
+        
+        async function testUpdate() {
+            try {
+                const id = document.getElementById('updateId').value;
+                const updateData = {
+                    name: document.getElementById('updateName').value
+                };
+                
+                const response = await fetch(`${API_BASE}/admin/products/${id}`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify(updateData)
+                });
+                
+                const data = await response.json();
+                showResult(`Update Product (${response.status})`, data);
+            } catch (error) {
+                showResult('Update Error', error.message);
+            }
+        }
+        
+        async function testSoftDelete() {
+            try {
+                const id = document.getElementById('deleteId').value;
+                const response = await fetch(`${API_BASE}/admin/products/${id}`, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                showResult(`Soft Delete (${response.status})`, data);
+            } catch (error) {
+                showResult('Soft Delete Error', error.message);
+            }
+        }
+        
+        async function testRestore() {
+            try {
+                const id = document.getElementById('deleteId').value;
+                const response = await fetch(`${API_BASE}/admin/products/restore/${id}`, {
+                    method: 'PUT',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                showResult(`Restore Product (${response.status})`, data);
+            } catch (error) {
+                showResult('Restore Error', error.message);
+            }
+        }
+        
+        async function testForceDelete() {
+            try {
+                const id = document.getElementById('deleteId').value;
+                const response = await fetch(`${API_BASE}/admin/products/force-delete/${id}`, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                showResult(`Force Delete (${response.status})`, data);
+            } catch (error) {
+                showResult('Force Delete Error', error.message);
+            }
+        }
+    </script>
+</body>
+</html>

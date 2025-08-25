@@ -12,7 +12,16 @@ class DatabaseSeeder extends Seeder
      * Seed the application's database.
      */
     public function run(): void
+
     {
+        $this->call([
+         BrandSeeder::class,
+        CategorySeeder::class,
+        ProductSeeder::class,
+            NewsSeeder::class,
+            VoucherSeeder::class,
+            FlashSaleSeeder::class,
+        ]);
         // User::factory(10)->create();
 
         User::factory()->create([
@@ -20,4 +29,5 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
         ]);
     }
+
 }
